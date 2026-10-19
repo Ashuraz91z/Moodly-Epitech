@@ -104,7 +104,7 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
             <p className="muted">Aucune équipe pour l&apos;instant.</p>
           ) : (
             <div className="table-wrap">
-              <table className="data">
+              <table className="data cards">
                 <thead><tr><th>Équipe</th><th>Membres</th><th>Participation</th><th>Moral 7 j</th><th>Tendance</th></tr></thead>
                 <tbody>
                   {data.teams.map((t) => (
@@ -114,13 +114,13 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
                         {watch(t) && <span className="pill low small">À surveiller</span>}
                         <div className="muted small">{email.get(t.manager_id)}</div>
                       </td>
-                      <td>{t.size}</td>
-                      <td>
+                      <td data-label="Membres">{t.size}</td>
+                      <td data-label="Participation">
                         <div className="meter" aria-hidden><div style={{ width: `${Math.min(100, (t.participation ?? 0) * 100)}%` }} /></div>
                         <span className="small">{pct(t.participation)}</span>
                       </td>
-                      <td><Mood avg={t.avg} /></td>
-                      <td><Spark trend={t.trend} /></td>
+                      <td data-label="Moral 7 j"><Mood avg={t.avg} /></td>
+                      <td data-label="Tendance"><Spark trend={t.trend} /></td>
                     </tr>
                   ))}
                 </tbody>
@@ -301,7 +301,7 @@ export function Users({ data, run }: Props) {
 
       <section className="panel flush">
         <div className="table-wrap">
-          <table className="data">
+          <table className="data cards">
             <thead><tr><th>E-mail</th><th>Rôle</th><th>Équipe</th><th>Dernière connexion</th><th><span className="sr-only">Actions</span></th></tr></thead>
             <tbody>
               {list.map((u) => {
@@ -309,7 +309,7 @@ export function Users({ data, run }: Props) {
                 return (
                   <tr key={u.id}>
                     <td><strong>{u.email}</strong><div className="muted small">Créé le {date(u.created_at)}</div></td>
-                    <td>
+                    <td data-label="Rôle">
                       {team ? (
                         <span className="pill role">Manager</span>
                       ) : (
@@ -319,7 +319,7 @@ export function Users({ data, run }: Props) {
                         </select>
                       )}
                     </td>
-                    <td>
+                    <td data-label="Équipe">
                       {team ? (
                         team
                       ) : u.role === "admin" ? (
@@ -331,7 +331,7 @@ export function Users({ data, run }: Props) {
                         </select>
                       )}
                     </td>
-                    <td className="muted">{date(u.last_sign_in_at)}</td>
+                    <td className="muted" data-label="Dernière connexion">{date(u.last_sign_in_at)}</td>
                     <td className="actions">
                       <button
                         className="icon-btn danger"

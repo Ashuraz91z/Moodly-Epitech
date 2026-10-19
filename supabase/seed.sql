@@ -2,8 +2,9 @@
 -- Comptes : admin@moodly.test (back-office), thomas@moodly.test (manager), ines@moodly.test, lea@moodly.test… (collaborateurs)
 -- Mot de passe de tous les comptes : moodly-demo
 --
--- Scénario : l'équipe est à ~2/5 (charge de travail) alors que Thomas pronostique 4/5,
--- puis le moral remonte et l'écart se referme. Le pronostic de la semaine en cours
+-- Scénario : l'équipe est à ~2/5 (charge de travail : impact moyen, plaisir au plus bas, entre
+-- zone de danger et burnout) alors que Thomas pronostique 4/5, puis l'équipe remonte vers
+-- l'épanouissement et l'écart se referme. Le pronostic de la semaine en cours
 -- et les réponses du jour ne sont pas seedés, pour pouvoir les faire en démo.
 
 create temp table demo_users (id uuid, email text, role text);
@@ -40,11 +41,12 @@ insert into profiles (id, role, team_id)
 select id, role, case when role <> 'admin' then '00000000-0000-0000-0000-0000000000aa'::uuid end from demo_users;
 
 -- ~85 % de participation par jour, hier compris, aujourd'hui exclu.
-insert into moods (entry_key, team_id, day, score, tag_ids)
+insert into moods (entry_key, team_id, day, impact, pleasure, tag_ids)
 select md5(random()::text || d || e),
   '00000000-0000-0000-0000-0000000000aa',
   moodly_today() - d,
-  greatest(1, least(5, (case when d > 14 then 2 when d > 7 then 3 else 4 end) + floor(random() * 3)::int - 1)),
+  (case when d > 14 then 2 + floor(random() * 3) when d > 7 then 3 + floor(random() * 2) else 2 + floor(random() * 4) end)::smallint,
+  (case when d > 14 then 1 + floor(random() * 2) when d > 7 then 2 + floor(random() * 3) else 3 + floor(random() * 3) end)::smallint,
   case when d > 14 and random() < 0.7 then array[1] else array[1 + floor(random() * 8)::int] end::smallint[]
 from generate_series(1, 30) d, generate_series(1, 8) e
 where random() < 0.85;
