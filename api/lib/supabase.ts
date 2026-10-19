@@ -3,7 +3,7 @@ import { createClient, type AuthError, type PostgrestError, type Session, type S
 
 type Query<T> = PromiseLike<{ data: T; error: PostgrestError | null; status: number }>;
 
-const client = (authorization?: string) =>
+export const client = (authorization?: string) =>
   createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!, {
     global: authorization ? { headers: { Authorization: authorization } } : undefined,
     auth: { persistSession: false, autoRefreshToken: false },
@@ -48,6 +48,7 @@ export async function logout(req: Request) {
   }
   jar.delete("access_token");
   jar.delete("refresh_token");
+  jar.delete("demo");
   return new Response(null, { status: 204 });
 }
 

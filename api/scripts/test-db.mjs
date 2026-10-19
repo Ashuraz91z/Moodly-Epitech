@@ -29,9 +29,6 @@ for (const f of readdirSync(`${root}/supabase/migrations`).sort()) {
   await db.exec(readFileSync(`${root}/supabase/migrations/${f}`, "utf8"));
 }
 await db.exec(readFileSync(`${root}/supabase/seed.sql`, "utf8"));
-const demoPlus = readFileSync(`${root}/supabase/demo_plus.sql`, "utf8");
-await db.exec(demoPlus);
-await db.exec(demoPlus); // rejouable : ne crée rien de plus
 
 const THOMAS = "00000000-0000-0000-0000-000000000001";
 const INES = "00000000-0000-0000-0000-000000000002";
@@ -79,6 +76,8 @@ assert.ok(!m.days.some((d) => "score" in d || "entry_key" in d));
 const old = m.weeks.find((w) => w.gap > 1.5);
 assert.equal(old?.dominant_tag, "Charge de travail", "angle mort détecté sur les premières semaines");
 assert.equal(m.weeks.at(-1).prediction, 3.5);
+assert.ok(m.recent.team_avg > 0 && typeof m.recent.dominant_tag === "string", "écart mesurable sur 7 jours, même un lundi");
+assert.ok(Math.abs(m.recent.team_avg - (m.matrix.impact + m.matrix.pleasure) / 2) < 0.02);
 
 // Matrice : agrégats des 7 derniers jours affichés, chaque réponse dans une seule zone.
 const z = m.matrix.zones;
@@ -118,7 +117,7 @@ for (const w of m.weeks.filter((w) => w.team_avg != null)) {
 await fails("42501", "authenticated", THOMAS, "select admin_dashboard()");
 await fails("42501", "authenticated", INES, "select admin_create_user('x@y.fr', 'motdepasse', 'employee')");
 const dash = (await as("authenticated", ADMIN, "select admin_dashboard() d"))[0].d;
-assert.equal(dash.users.length, 26, "seed + démo enrichie, sans doublon");
+assert.equal(dash.users.length, 26, "comptes de démo");
 assert.equal(dash.teams.length, 3);
 const produit = dash.teams.find((t) => t.id === TEAM);
 assert.equal(produit.size, 8);
@@ -161,5 +160,19 @@ await fails("23505", "authenticated", ADMIN, "select admin_save_tag(null, 'forma
 const tags = (await as("authenticated", INES, "select id, label from tags order by id")).map((t) => t.label);
 assert.equal(tags[1], "Ambiance d'équipe");
 assert.equal(tags.at(-1), "Formation");
+
+// Réinitialisation de la démo : réservée aux comptes de démo, rejouable, remet tout d'aplomb.
+await fails("42501", "authenticated", NEW, "select demo_reset()");
+await fails("42501", "anon", null, "select demo_reset()");
+await as("authenticated", INES, "select demo_reset()");
+await as("authenticated", LEA, "select demo_reset()");
+const reset = (await as("authenticated", ADMIN, "select admin_dashboard() d"))[0].d;
+assert.equal(reset.users.length, 26, "comptes ajoutés pendant la démo supprimés, comptes supprimés recréés");
+assert.deepEqual(reset.teams.map((t) => t.size).sort(), [7, 7, 8]);
+assert.equal(reset.tags.length, 8);
+assert.equal(reset.tags[1].label, "Ambiance", "libellés d'origine");
+assert.equal((await as("authenticated", INES, "select has_submitted_today() v"))[0].v, false, "pas de réponse du jour");
+assert.deepEqual((await as("authenticated", THOMAS, "select get_mirror() m"))[0].m, { needs_prediction: true }, "pronostic à refaire");
+assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions"))[0].n, 3);
 
 console.log("OK", JSON.stringify({ ...m, days: `${m.days.length} jours` }, null, 1));
