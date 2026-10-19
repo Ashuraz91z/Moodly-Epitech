@@ -1,5 +1,5 @@
--- Données de démo : 1 manager, 8 collaborateurs, 30 jours de réponses.
--- Comptes : thomas@moodly.test (manager), ines@moodly.test, lea@moodly.test… (collaborateurs)
+-- Données de démo : 1 admin, 1 manager, 8 collaborateurs, 30 jours de réponses.
+-- Comptes : admin@moodly.test (back-office), thomas@moodly.test (manager), ines@moodly.test, lea@moodly.test… (collaborateurs)
 -- Mot de passe de tous les comptes : moodly-demo
 --
 -- Scénario : l'équipe est à ~2/5 (charge de travail) alors que Thomas pronostique 4/5,
@@ -16,7 +16,8 @@ insert into demo_users values
   ('00000000-0000-0000-0000-000000000006', 'karim@moodly.test',  'employee'),
   ('00000000-0000-0000-0000-000000000007', 'julie@moodly.test',  'employee'),
   ('00000000-0000-0000-0000-000000000008', 'nathan@moodly.test', 'employee'),
-  ('00000000-0000-0000-0000-000000000009', 'emma@moodly.test',   'employee');
+  ('00000000-0000-0000-0000-000000000009', 'emma@moodly.test',   'employee'),
+  ('00000000-0000-0000-0000-000000000010', 'admin@moodly.test',  'admin');
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -36,7 +37,7 @@ insert into teams (id, name, manager_id)
 values ('00000000-0000-0000-0000-0000000000aa', 'Équipe Produit', '00000000-0000-0000-0000-000000000001');
 
 insert into profiles (id, role, team_id)
-select id, role, '00000000-0000-0000-0000-0000000000aa' from demo_users;
+select id, role, case when role <> 'admin' then '00000000-0000-0000-0000-0000000000aa'::uuid end from demo_users;
 
 -- ~85 % de participation par jour, hier compris, aujourd'hui exclu.
 insert into moods (entry_key, team_id, day, score, tag_ids)
