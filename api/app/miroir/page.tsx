@@ -6,6 +6,8 @@ import { api, ApiError, type Mirror } from "@/lib/api";
 import { Logout } from "../logout";
 import { Icon, Loader, type IconName } from "../icons";
 import { TeamMatrix } from "../matrix";
+import { ActionPlan } from "./plan";
+import { downloadCsv } from "@/lib/csv";
 import { FORECAST, MirrorChart, TEAM, fmt, todayInParis } from "./chart";
 
 const ACTIONS: Record<string, string[]> = {
@@ -27,35 +29,6 @@ const WEATHER: { min: number; icon: IconName; color: string; label: string }[] =
 ];
 const weatherOf = (avg: number) => WEATHER.find((w) => avg >= w.min)!;
 const shortDate = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
-
-// Pistes cochées par le manager, gardées dans ce navigateur pour la semaine.
-function Checklist({ actions, week }: { actions: string[]; week: string }) {
-  const key = `moodly-actions-${week}`;
-  const [done, setDone] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(key) ?? "[]"); } catch { return []; }
-  });
-  function toggle(a: string) {
-    const next = done.includes(a) ? done.filter((x) => x !== a) : [...done, a];
-    setDone(next);
-    try { localStorage.setItem(key, JSON.stringify(next)); } catch {}
-  }
-  const count = actions.filter((a) => done.includes(a)).length;
-  return (
-    <div>
-      <h2>Pistes d&apos;action <small>{count}/{actions.length} faites</small></h2>
-      <ul className="checklist">
-        {actions.map((a) => (
-          <li key={a}>
-            <button aria-pressed={done.includes(a)} onClick={() => toggle(a)}>
-              <span className="box" aria-hidden>{done.includes(a) && <Icon name="check" size={14} />}</span>{a}
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="progress" aria-hidden><div style={{ width: `${(count / actions.length) * 100}%` }} /></div>
-    </div>
-  );
-}
 
 const UNDERESTIMATE = ["Te rassurer : l'équipe va plutôt bien", "Partager ce constat positif avec l'équipe", "Prêter attention à ton propre moral"];
 
@@ -119,11 +92,26 @@ export default function Miroir() {
   const participation = mirror.team_size ? Math.round((mirror.avg_daily_responses / mirror.team_size) * 100) : 0;
   const actions = gap != null && gap < 0 ? UNDERESTIMATE : ACTIONS[week?.dominant_tag ?? ""] ?? [];
 
+  function exportCsv() {
+    if (mirror?.needs_prediction !== false) return;
+    downloadCsv(`moodly-miroir-${today}`, [
+      ["Semaine du", "Pronostic", "Moral équipe", "Impact", "Plaisir", "Écart", "Tag dominant"],
+      ...mirror.weeks.map((w) => [w.week_start, w.prediction, w.team_avg, w.impact, w.pleasure, w.gap, w.dominant_tag]),
+      [],
+      ["Jour", "Moral équipe", "Réponses"],
+      ...mirror.days.map((d) => [d.day, d.team_avg, d.responses]),
+    ]);
+  }
+
   return (
     <main className="screen wide">
       <div className="top">
         <p className="eyebrow">Le Miroir · 30 jours</p>
-        <Logout />
+        <div className="top-actions no-print">
+          <button className="ghost" onClick={exportCsv}><Icon name="download" size={16} />CSV</button>
+          <button className="ghost" onClick={() => print()}><Icon name="printer" size={16} />PDF</button>
+          <Logout />
+        </div>
       </div>
 
       {week?.team_avg != null && week.prediction != null && (
@@ -164,9 +152,9 @@ export default function Miroir() {
       </div>
 
       <section className="matrix-block">
-        <h2>Matrice de l&apos;équipe <small>7 derniers jours</small></h2>
+        <h2>Matrice de l&apos;équipe <small>trajectoire sur 30 jours</small></h2>
         {mirror.matrix ? (
-          <TeamMatrix data={mirror.matrix} />
+          <TeamMatrix data={mirror.matrix} weeks={mirror.weeks} />
         ) : (
           <p className="note">Pas encore assez de réponses : la matrice s&apos;affiche à partir de 5 réponses par jour.</p>
         )}
@@ -188,7 +176,7 @@ export default function Miroir() {
           <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception est proche du ressenti de l&apos;équipe cette semaine.</div>
         ) : null}
 
-        {blind && actions.length > 0 && <Checklist key={week!.week_start} actions={actions} week={week!.week_start} />}
+        <ActionPlan suggestions={blind ? actions : []} weeks={mirror.weeks} today={today} />
       </div>
 
       <details>

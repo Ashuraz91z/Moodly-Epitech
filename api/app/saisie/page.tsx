@@ -2,42 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { api, ApiError, type Me, type Tag } from "@/lib/api";
 import { todayInParis } from "../miroir/chart";
 import { Logout } from "../logout";
 import { Icon, Loader } from "../icons";
 import { MatrixInput, ZONES, zoneOf, type Point } from "../matrix";
+import { historyKey, lastDays, readHistory, streak, type History } from "../history";
 
 const ONBOARDING_KEY = "moodly-onboarding-vu";
-// Historique personnel : uniquement dans ce navigateur, jamais envoyé (la base ne sait pas qui a répondu quoi).
-const historyKey = (userId: string) => `moodly-historique-${userId}`;
-
-type History = Record<string, Point>;
-
-function readHistory(userId: string): History {
-  try {
-    const raw: Record<string, Point | number> = JSON.parse(localStorage.getItem(historyKey(userId)) ?? "{}");
-    // Anciennes saisies (une note de 1 à 5) : reportées sur les deux axes.
-    return Object.fromEntries(Object.entries(raw).map(([d, v]) => [d, typeof v === "number" ? { impact: v, pleasure: v } : v]));
-  } catch {
-    return {};
-  }
-}
-
-function lastDays(today: string, n: number) {
-  const t = Date.parse(`${today}T00:00:00Z`);
-  return Array.from({ length: n }, (_, k) => new Date(t - (n - 1 - k) * 864e5).toISOString().slice(0, 10));
-}
-
-function streak(history: History, today: string) {
-  let n = 0;
-  for (const d of lastDays(today, 365).reverse()) {
-    if (history[d]) n++;
-    else if (d !== today) break;
-  }
-  return n;
-}
-
 function Done({ history }: { history: History }) {
   const today = todayInParis();
   const days = lastDays(today, 14);
@@ -77,6 +50,7 @@ function Done({ history }: { history: History }) {
           </div>
           <div className="history-legend"><span>il y a 14 jours</span><span>aujourd&apos;hui</span></div>
           <p className="note" style={{ marginTop: 12 }}>Ton historique reste sur cet appareil : il n&apos;est jamais envoyé.</p>
+          <Link className="btn ghost-btn" href="/parcours" style={{ marginTop: 12 }}><Icon name="chart" size={18} />Voir mon parcours</Link>
         </div>
       )}
     </>
@@ -195,7 +169,10 @@ export default function Saisie() {
             <button className="btn" disabled={!point || picked.length === 0 || busy} onClick={send}>{busy ? "Envoi…" : "Envoyer"}</button>
             {(!point || picked.length === 0) && <p className="hint">{!point ? "Place d'abord ton point sur la matrice." : "Choisis au moins un sujet."}</p>}
             <p className="note">Ton manager ne verra jamais ta réponse individuelle.</p>
-            <Logout />
+            <div className="links">
+              <Link className="link" href="/parcours"><Icon name="chart" size={16} />Mon parcours</Link>
+              <Logout />
+            </div>
           </div>
         </>
       )}
