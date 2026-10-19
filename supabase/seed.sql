@@ -1,0 +1,54 @@
+-- Données de démo : 1 manager, 8 collaborateurs, 30 jours de réponses.
+-- Comptes : thomas@moodly.test (manager), ines@moodly.test, lea@moodly.test… (collaborateurs)
+-- Mot de passe de tous les comptes : moodly-demo
+--
+-- Scénario : l'équipe est à ~2/5 (charge de travail) alors que Thomas pronostique 4/5,
+-- puis le moral remonte et l'écart se referme. Le pronostic de la semaine en cours
+-- et les réponses du jour ne sont pas seedés, pour pouvoir les faire en démo.
+
+create temp table demo_users (id uuid, email text, role text);
+insert into demo_users values
+  ('00000000-0000-0000-0000-000000000001', 'thomas@moodly.test', 'manager'),
+  ('00000000-0000-0000-0000-000000000002', 'ines@moodly.test',   'employee'),
+  ('00000000-0000-0000-0000-000000000003', 'lea@moodly.test',    'employee'),
+  ('00000000-0000-0000-0000-000000000004', 'hugo@moodly.test',   'employee'),
+  ('00000000-0000-0000-0000-000000000005', 'sarah@moodly.test',  'employee'),
+  ('00000000-0000-0000-0000-000000000006', 'karim@moodly.test',  'employee'),
+  ('00000000-0000-0000-0000-000000000007', 'julie@moodly.test',  'employee'),
+  ('00000000-0000-0000-0000-000000000008', 'nathan@moodly.test', 'employee'),
+  ('00000000-0000-0000-0000-000000000009', 'emma@moodly.test',   'employee');
+
+insert into auth.users (
+  instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+  raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+  confirmation_token, recovery_token, email_change_token_new, email_change
+)
+select '00000000-0000-0000-0000-000000000000', id, 'authenticated', 'authenticated', email,
+  extensions.crypt('moodly-demo', extensions.gen_salt('bf')), now(),
+  '{"provider":"email","providers":["email"]}', '{}', now(), now(), '', '', '', ''
+from demo_users;
+
+insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+select gen_random_uuid(), id, id::text, jsonb_build_object('sub', id::text, 'email', email), 'email', now(), now(), now()
+from demo_users;
+
+insert into teams (id, name, manager_id)
+values ('00000000-0000-0000-0000-0000000000aa', 'Équipe Produit', '00000000-0000-0000-0000-000000000001');
+
+insert into profiles (id, role, team_id)
+select id, role, '00000000-0000-0000-0000-0000000000aa' from demo_users;
+
+-- ~85 % de participation par jour, hier compris, aujourd'hui exclu.
+insert into moods (entry_key, team_id, day, score, tag_ids)
+select md5(random()::text || d || e),
+  '00000000-0000-0000-0000-0000000000aa',
+  moodly_today() - d,
+  greatest(1, least(5, (case when d > 14 then 2 when d > 7 then 3 else 4 end) + floor(random() * 3)::int - 1)),
+  case when d > 14 and random() < 0.7 then array[1] else array[1 + floor(random() * 8)::int] end::smallint[]
+from generate_series(1, 30) d, generate_series(1, 8) e
+where random() < 0.85;
+
+-- Thomas pronostique toujours 4/5 (semaines passées seulement).
+insert into predictions (team_id, week_start, score)
+select '00000000-0000-0000-0000-0000000000aa', w::date, 4
+from generate_series(date_trunc('week', moodly_today() - 30), date_trunc('week', moodly_today()) - interval '1 week', interval '1 week') w;
