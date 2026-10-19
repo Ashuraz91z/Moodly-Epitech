@@ -8,9 +8,8 @@ import { todayInParis } from "../miroir/chart";
 import { Logout } from "../logout";
 import { Icon, Loader } from "../icons";
 import { MatrixInput, ZONES, zoneOf, type Point } from "../matrix";
-import { historyKey, lastDays, readHistory, streak, type History } from "../history";
+import { ONBOARDING_KEY, historyKey, lastDays, readHistory, streak, type History } from "../history";
 
-const ONBOARDING_KEY = "moodly-onboarding-vu";
 function Done({ history }: { history: History }) {
   const today = todayInParis();
   const days = lastDays(today, 14);

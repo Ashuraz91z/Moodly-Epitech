@@ -13,7 +13,9 @@ type Props = { data: Admin; run: Run };
 const pct = (n: number | null) => (n == null ? "—" : `${Math.round(n * 100)} %`);
 const date = (d: string | null) => (d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "Jamais");
 const health = (avg: number | null) => (avg == null ? "none" : avg >= 3.4 ? "good" : avg >= 2.6 ? "mid" : "low");
-const watch = (t: AdminTeam) => (t.avg != null && t.avg < 2.6) || (t.participation != null && t.participation < 0.5);
+// À surveiller : moral bas, plaisir bas (zone Robot ou danger, risque d'épuisement) ou peu de réponses.
+const watch = (t: AdminTeam) =>
+  (t.avg != null && t.avg < 2.6) || (t.pleasure != null && t.pleasure < 2.5) || (t.participation != null && t.participation < 0.5);
 const ROLE = { employee: "Collaborateur", manager: "Manager", admin: "Admin" };
 
 function Header({ title, sub, children }: { title: string; sub?: string; children?: React.ReactNode }) {

@@ -9,7 +9,7 @@ api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir, 
 
 ## Mise en place
 
-1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql` à `004_features.sql`), puis `supabase/seed.sql` (démo).
+1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql` à `006_miroir_recent.sql`), puis `supabase/seed.sql` (démo).
    Base déjà en place : exécuter seulement les migrations manquantes. Après `002_admin.sql`, nommer un premier admin :
    ```sql
    update profiles set role = 'admin', team_id = null
@@ -22,9 +22,15 @@ api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir, 
    Les clés Supabase sont dans `api/.env`. Version web sur http://localhost:3000.
 3. **Tests** (aucune connexion nécessaire) : `npm run test:db` (SQL sur un Postgres en mémoire) et `npm run test:csv` (export CSV) dans `api/`.
 
-Démo enrichie (back-office avec 3 équipes) : exécuter ensuite `supabase/demo_plus.sql`, rejouable sans doublon.
+Comptes de démo (mot de passe `moodly-demo`) : voir l'en-tête de `supabase/seed.sql`. `admin@moodly.test` ouvre le back-office sur `/admin` ; `thomas@`, `marc@` et `lina@moodly.test` sont managers.
 
-Comptes de démo (mot de passe `moodly-demo`) : voir les en-têtes de `supabase/seed.sql` et `supabase/demo_plus.sql`. `admin@moodly.test` ouvre le back-office sur `/admin` ; `thomas@`, `marc@` et `lina@moodly.test` sont managers.
+## Démo
+
+Sur la page de connexion, **Lancer la démo guidée** remet toute la démo à zéro (calée sur aujourd'hui) puis enchaîne 3 étapes avec un bandeau de guidage : Inès (collaboratrice) répond sur la matrice, Thomas (manager) fait son pronostic et découvre le Miroir, puis le back-office RH. Les boutons Collaborateur / Manager / Admin entrent directement dans un rôle, eux aussi après remise à zéro.
+
+- La remise à zéro (`private.demo_reset()`, migration 005) **efface tout ce qui n'est pas la démo** : à réserver à une base dédiée.
+- `seed.sql` fait la même remise à zéro, rejouable à volonté.
+- `DEMO_PASSWORD=` (vide) dans l'environnement de l'API désactive l'entrée en démo.
 
 ## Authentification
 
@@ -44,6 +50,7 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 |---|---|---|---|---|
 | POST | `/api/auth/login` | public | `{ email, password }` | `{ access_token, refresh_token, expires_at }` |
 | POST | `/api/auth/refresh` | public | `{ refresh_token }` | idem |
+| POST | `/api/auth/demo` | public | `{ as: "employee" \| "manager" \| "admin", reset?: bool }` | idem, connecté au compte de démo |
 | POST | `/api/auth/logout` | tous | | 204, révoque la session (et efface les cookies web) |
 | GET | `/api/me` | tous | | `{ id, role: "employee" \| "manager" \| "admin", team: { id, name } \| null }` |
 | GET | `/api/tags` | tous | | `[{ id, label }]` |
@@ -70,6 +77,7 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
   "needs_prediction": false,
   "team_size": 8,
   "avg_daily_responses": 6.9,
+  "recent": { "team_avg": 3.6, "dominant_tag": "Charge de travail" },
   "matrix": { "responses": 48, "impact": 3.5, "pleasure": 3.9,
               "zones": { "thriving": 17, "dreamer": 9, "robot": 4, "danger": 2, "middle": 16 },
               "zone_tags": { "robot": ["Charge de travail"] } },
@@ -81,6 +89,7 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 
 - Matrice du bonheur au travail : chaque réponse est un point (impact, plaisir). `team_avg` est la moyenne des deux axes.
 - `matrix` : 7 derniers jours sans aujourd'hui, jours d'au moins 5 réponses ; `null` sinon. Zones : `thriving` (impact et plaisir > 3), `dreamer` (impact < 3, plaisir > 3), `robot` (impact > 3, plaisir < 3), `danger` (les deux < 3), `middle` (un axe à 3).
+- `recent` : moral moyen et sujet dominant des 7 derniers jours (sans aujourd'hui) ; l'écart du Miroir = pronostic de la semaine − `recent.team_avg`, disponible même un lundi.
 - `zone_tags` : les 2 sujets les plus cités par zone, seulement pour les zones d'au moins 5 réponses.
 - `weeks[].impact` / `pleasure` : point de la semaine sur la matrice (trajectoire de l'équipe).
 - `days` : moyenne quotidienne, seulement pour les jours avec au moins 5 réponses.

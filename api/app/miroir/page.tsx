@@ -85,12 +85,16 @@ export default function Miroir() {
   if (mirror.needs_prediction) return <Forecast onDone={load} />;
 
   const today = todayInParis();
+  // Pronostic de la semaine face au ressenti des 7 derniers jours (disponible même un lundi).
   const week = mirror.weeks.at(-1);
-  const gap = week?.gap ?? null;
+  const prediction = week?.prediction ?? null;
+  const teamAvg = mirror.recent?.team_avg ?? null;
+  const gap = prediction != null && teamAvg != null ? Math.round((prediction - teamAvg) * 100) / 100 : null;
   const blind = gap != null && Math.abs(gap) > 1.5;
+  const dominant = mirror.recent?.dominant_tag ?? null;
   const first = mirror.weeks.find((w) => w.gap != null);
   const participation = mirror.team_size ? Math.round((mirror.avg_daily_responses / mirror.team_size) * 100) : 0;
-  const actions = gap != null && gap < 0 ? UNDERESTIMATE : ACTIONS[week?.dominant_tag ?? ""] ?? [];
+  const actions = gap != null && gap < 0 ? UNDERESTIMATE : ACTIONS[dominant ?? ""] ?? [];
 
   function exportCsv() {
     if (mirror?.needs_prediction !== false) return;
@@ -114,19 +118,19 @@ export default function Miroir() {
         </div>
       </div>
 
-      {week?.team_avg != null && week.prediction != null && (
+      {teamAvg != null && prediction != null && (
         <div className="weather">
-          <span className="icon" style={{ color: weatherOf(week.team_avg).color }}><Icon name={weatherOf(week.team_avg).icon} size={36} /></span>
+          <span className="icon" style={{ color: weatherOf(teamAvg).color }}><Icon name={weatherOf(teamAvg).icon} size={36} /></span>
           <div>
-            <strong>Météo de l&apos;équipe : {weatherOf(week.team_avg).label}</strong>
-            <p>Tu pensais <strong style={{ color: FORECAST }}>{fmt(week.prediction)}</strong> · l&apos;équipe est à <strong style={{ color: TEAM }}>{fmt(week.team_avg)}</strong> / 5 cette semaine</p>
+            <strong>Météo de l&apos;équipe : {weatherOf(teamAvg).label}</strong>
+            <p>Tu pensais <strong style={{ color: FORECAST }}>{fmt(prediction)}</strong> · l&apos;équipe est à <strong style={{ color: TEAM }}>{fmt(teamAvg)}</strong> / 5 ces 7 derniers jours</p>
           </div>
         </div>
       )}
 
       <div className="tiles">
         <div className={`tile${blind ? " alert" : ""}`}>
-          <span>Écart semaine{blind ? " · angle mort" : ""}</span>
+          <span>Écart · 7 jours{blind ? " · angle mort" : ""}</span>
           <strong>{gap == null ? "—" : `${fmt(Math.abs(gap))} pt`}</strong>
           <span>{gap == null ? "Pas encore assez de réponses" : gap > 0 ? "Tu surestimes" : gap < 0 ? "Tu sous-estimes" : "Lecture juste"}</span>
         </div>
@@ -168,7 +172,7 @@ export default function Miroir() {
               <h2>Angle mort détecté</h2>
               <p>
                 Ton équipe va {gap! > 0 ? "moins bien" : "mieux"} que tu ne le penses.
-                {gap! > 0 && week?.dominant_tag && <> Tag dominant : <strong>{week.dominant_tag}</strong></>}
+                {gap! > 0 && dominant && <> Sujet dominant : <strong>{dominant}</strong></>}
               </p>
             </div>
           </div>
