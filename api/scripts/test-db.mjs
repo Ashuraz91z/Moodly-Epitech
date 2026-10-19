@@ -83,6 +83,23 @@ assert.equal(z.thriving + z.dreamer + z.danger + z.robot + z.middle, m.matrix.re
 assert.ok(m.matrix.impact >= 1 && m.matrix.impact <= 5 && m.matrix.pleasure >= 1 && m.matrix.pleasure <= 5);
 assert.ok(z.thriving > z.danger, "l'équipe est remontée vers l'épanouissement");
 
+// Trajectoire : un point par semaine affichée ; sujets par zone seulement au-delà de 5 réponses.
+assert.ok(m.weeks.filter((w) => w.team_avg != null).every((w) => w.impact >= 1 && w.pleasure >= 1));
+assert.ok(Object.keys(m.matrix.zone_tags).length > 0);
+for (const [zone, labels] of Object.entries(m.matrix.zone_tags)) {
+  assert.ok(m.matrix.zones[zone] >= 5, `zone ${zone} sous le seuil d'anonymat`);
+  assert.ok(labels.length >= 1 && labels.length <= 2);
+}
+
+// Plan d'action : réservé au manager de l'équipe.
+const act = (await as("authenticated", THOMAS, "insert into actions (team_id, label) values ($1, 'Point charge') returning week_start, label", [TEAM]))[0];
+assert.equal(act.label, "Point charge");
+assert.equal((await as("authenticated", INES, "select * from actions")).length, 0);
+await fails("42501", "authenticated", INES, "insert into actions (team_id, label) values ($1, 'x')", [TEAM]);
+await fails("23514", "authenticated", THOMAS, "insert into actions (team_id, label) values ($1, '  ')", [TEAM]);
+await as("authenticated", THOMAS, "update actions set done_at = now()");
+assert.ok((await as("authenticated", THOMAS, "select done_at from actions"))[0].done_at);
+
 // Semaines = moyenne pondérée des seuls jours affichés (pas de fuite des jours sous le seuil).
 for (const w of m.weeks.filter((w) => w.team_avg != null)) {
   const days = m.days.filter((d) => {
@@ -103,6 +120,8 @@ assert.equal(dash.teams[0].size, 8);
 assert.ok(dash.teams[0].avg > 0 && dash.teams[0].participation > 0.5);
 assert.ok(dash.tags.some((t) => t.uses > 0));
 assert.ok(!JSON.stringify(dash).includes("entry_key") && !JSON.stringify(dash).includes("score"), "aucune réponse brute");
+assert.ok(dash.teams[0].impact > 0 && dash.teams[0].pleasure > 0);
+assert.ok(Object.values(dash.stats.zones).reduce((x, y) => x + y, 0) > 0);
 
 // Comptes.
 const NEW = (await as("authenticated", ADMIN, "select admin_create_user(' Zoe@Moodly.test ', 'motdepasse', 'employee', $1) id", [TEAM]))[0].id;

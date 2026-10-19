@@ -105,29 +105,72 @@ export function MatrixInput({ value, onChange }: { value: Point | null; onChange
   );
 }
 
-export type TeamMatrixData = { responses: number; impact: number; pleasure: number; zones: Record<Zone, number> };
+export type TeamMatrixData = { responses: number; impact: number; pleasure: number; zones: Record<Zone, number>; zone_tags: Partial<Record<Zone, string[]>> };
 
-// Côté manager : répartition des réponses par zone et point moyen de l'équipe.
-export function TeamMatrix({ data }: { data: TeamMatrixData }) {
+const QUADRANTS = ["dreamer", "thriving", "danger", "robot"] as const;
+const shortDate = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
+const coords = (p: Point) => `${(p.impact - 0.5) * 20},${(5.5 - p.pleasure) * 20}`;
+
+export type Mark = { p: Point; title: string; label?: string; color?: string };
+
+// Matrice en lecture : contenu libre par zone, points reliés dans l'ordre (trail), dernier point mis en avant.
+export function MatrixPlot({ marks, label, trail = false, zones }: { marks: Mark[]; label: string; trail?: boolean; zones?: Partial<Record<Zone, React.ReactNode>> }) {
+  return (
+    <div className="matrix-frame">
+      <span className="axis-y" aria-hidden>Plaisir ↑</span>
+      <div className="matrix" role="img" aria-label={label}>
+        {QUADRANTS.map((z) => <span key={z} className={`q q-${z}`}>{zones?.[z] ?? ZONES[z].label}</span>)}
+        {trail && marks.length > 1 && (
+          <svg className="trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
+            <polyline points={marks.map((m) => coords(m.p)).join(" ")} vectorEffect="non-scaling-stroke" />
+          </svg>
+        )}
+        {marks.map((m, i) => {
+          const last = !trail || i === marks.length - 1;
+          return (
+            <span
+              key={i}
+              className={`mark${last ? " last" : ""}${m.p.impact > 4 ? " edge-r" : m.p.impact < 2 ? " edge-l" : ""}`}
+              title={m.title}
+              style={{ ...pos(m.p), background: m.color, opacity: last ? undefined : 0.35 + 0.65 * (i / (marks.length - 1)) }}
+            >
+              {m.label && <em>{m.label}</em>}
+            </span>
+          );
+        })}
+      </div>
+      <span className="axis-x" aria-hidden>Impact →</span>
+    </div>
+  );
+}
+
+const pointText = (p: Point) => `impact ${p.impact.toFixed(1)}, plaisir ${p.pleasure.toFixed(1)}`;
+
+// Côté manager : trajectoire de l'équipe semaine par semaine, répartition et sujets par zone.
+export function TeamMatrix({ data, weeks }: { data: TeamMatrixData; weeks: { week_start: string; impact: number | null; pleasure: number | null }[] }) {
   const share = (z: Zone) => Math.round((data.zones[z] / data.responses) * 100);
-  const avg = { impact: data.impact, pleasure: data.pleasure };
+  const path = weeks.filter((w) => w.impact != null && w.pleasure != null);
+  const marks: Mark[] = path.length
+    ? path.map((w, i) => ({
+        p: { impact: w.impact!, pleasure: w.pleasure! },
+        title: `Semaine du ${shortDate(w.week_start)}`,
+        label: i === 0 || i === path.length - 1 ? shortDate(w.week_start) : undefined,
+      }))
+    : [{ p: { impact: data.impact, pleasure: data.pleasure }, title: "7 derniers jours" }];
+  const zones = Object.fromEntries(
+    QUADRANTS.map((z) => [z, <><b>{share(z)} %</b>{ZONES[z].label}{data.zone_tags[z] && <small>{data.zone_tags[z]!.join(" · ")}</small>}</>]),
+  );
   return (
     <div className="team-matrix">
-      <div className="matrix-frame">
-        <span className="axis-y" aria-hidden>Plaisir ↑</span>
-        <div className="matrix" role="img" aria-label={`Point moyen de l'équipe : impact ${data.impact.toFixed(1)}, plaisir ${data.pleasure.toFixed(1)} sur 5.`}>
-          {(["dreamer", "thriving", "danger", "robot"] as const).map((z) => (
-            <span key={z} className={`q q-${z}`}>
-              <b>{share(z)} %</b>
-              {ZONES[z].label}
-            </span>
-          ))}
-          <span className="dot team" style={pos(avg)} />
-        </div>
-        <span className="axis-x" aria-hidden>Impact →</span>
-      </div>
+      <MatrixPlot
+        marks={marks}
+        trail
+        zones={zones}
+        label={`Trajectoire de l'équipe : ${marks.map((m) => `${m.title}, ${pointText(m.p)}`).join(" ; ")}.`}
+      />
       <p className="muted small">
-        Le rond indique le point moyen de l&apos;équipe ({data.responses} réponses). {share("middle")} % des réponses sont sur un axe (« entre deux »).
+        Chaque point est une semaine, le plus marqué la plus récente. Pourcentages et sujets : 7 derniers jours ({data.responses} réponses,
+        sujets affichés à partir de 5 réponses par zone). {share("middle")} % des réponses sont « entre deux ».
       </p>
     </div>
   );

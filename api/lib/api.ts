@@ -1,4 +1,4 @@
-import type { TeamMatrixData } from "@/app/matrix";
+import type { TeamMatrixData, Zone } from "@/app/matrix";
 
 // Appels à l'API depuis la version web (cookies httpOnly envoyés automatiquement).
 export class ApiError extends Error {
@@ -24,16 +24,17 @@ export type Role = "employee" | "manager" | "admin";
 export type Me = { id: string; role: Role; team: { id: string; name: string } | null };
 export type Tag = { id: number; label: string };
 export type Day = { day: string; team_avg: number; responses: number };
-export type Week = { week_start: string; prediction: number | null; team_avg: number | null; gap: number | null; dominant_tag: string | null };
+export type Week = { week_start: string; prediction: number | null; team_avg: number | null; impact: number | null; pleasure: number | null; gap: number | null; dominant_tag: string | null };
 export type Mirror =
   | { needs_prediction: true }
   | { needs_prediction: false; team_size: number; avg_daily_responses: number; matrix: TeamMatrixData | null; days: Day[]; weeks: Week[] };
 
-export type AdminTeam = { id: string; name: string; manager_id: string; size: number; participation: number | null; avg: number | null; trend: { week_start: string; avg: number }[] | null };
+export type AdminTeam = { id: string; name: string; manager_id: string; size: number; participation: number | null; avg: number | null; impact: number | null; pleasure: number | null; trend: { week_start: string; avg: number }[] | null };
 export type AdminUser = { id: string; email: string; role: Role; team_id: string | null; created_at: string; last_sign_in_at: string | null };
 export type Admin = {
-  stats: { avg: number | null; participation: number | null };
+  stats: { avg: number | null; participation: number | null; zones: Partial<Record<Zone, number>> | null };
   teams: AdminTeam[];
   users: AdminUser[];
   tags: (Tag & { uses: number })[];
 };
+export type Action = { id: string; week_start: string; label: string; done_at: string | null };

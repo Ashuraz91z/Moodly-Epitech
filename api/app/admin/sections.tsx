@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, type Admin, type AdminTeam, type AdminUser } from "@/lib/api";
+import { downloadCsv } from "@/lib/csv";
 import { Icon } from "../icons";
 import { fmt } from "../miroir/chart";
+import { MatrixPlot, ZONES, type Zone } from "../matrix";
 
 export type Run = (fn: () => Promise<unknown>, ok: string, inline?: boolean) => Promise<string | null>;
 type Props = { data: Admin; run: Run };
@@ -66,10 +68,33 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
   const flagged = data.teams.filter(watch);
   const tags = [...data.tags].sort((a, b) => b.uses - a.uses);
   const max = Math.max(1, ...tags.map((t) => t.uses));
+  const plotted = data.teams.filter((t) => t.impact != null && t.pleasure != null);
+  const zones = data.stats.zones ?? {};
+  const total = Object.values(zones).reduce((a, b) => a + b, 0);
+  const share = (z: Zone) => Math.round(((zones[z] ?? 0) / total) * 100);
+
+  // Résumé par équipe (tendance = moyenne de chaque semaine sur 30 jours), puis sujets.
+  function exportCsv() {
+    downloadCsv(`moodly-rapport-${new Date().toISOString().slice(0, 10)}`, [
+      ["Équipe", "Manager", "Membres", "Participation 7 j (%)", "Moral 7 j", "Impact 7 j", "Plaisir 7 j", "Tendance 30 j"],
+      ...data.teams.map((t) => [
+        t.name, email.get(t.manager_id), t.size, t.participation == null ? null : Math.round(t.participation * 100),
+        t.avg, t.impact, t.pleasure, (t.trend ?? []).map((w) => fmt(w.avg)).join(" → "),
+      ]),
+      [],
+      ["Sujet", "Citations 30 j"],
+      ...tags.map((t) => [t.label, t.uses]),
+    ]);
+  }
 
   return (
     <>
-      <Header title="Vue d'ensemble" sub="7 derniers jours, aujourd'hui exclu. Moyennes sur les jours d'au moins 5 réponses, pour préserver l'anonymat." />
+      <Header title="Vue d'ensemble" sub="7 derniers jours, aujourd'hui exclu. Moyennes sur les jours d'au moins 5 réponses, pour préserver l'anonymat.">
+        <div className="top-actions no-print">
+          <button className="ghost" onClick={exportCsv}><Icon name="download" size={16} />Exporter CSV</button>
+          <button className="ghost" onClick={() => print()}><Icon name="printer" size={16} />Rapport PDF</button>
+        </div>
+      </Header>
 
       <div className="kpis">
         <div className="kpi">
@@ -129,21 +154,42 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
           )}
         </section>
 
-        <section className="panel">
-          <div className="panel-head">
-            <h2>Sujets les plus cités</h2>
-            <span className="muted small">30 jours</span>
-          </div>
-          <ol className="bars">
-            {tags.map((t) => (
-              <li key={t.id}>
-                <span>{t.label}</span>
-                <div className="meter" aria-hidden><div style={{ width: `${(t.uses / max) * 100}%` }} /></div>
-                <span className="small">{t.uses}</span>
-              </li>
-            ))}
-          </ol>
-        </section>
+        <div className="stack">
+          <section className="panel">
+            <div className="panel-head">
+              <h2>Matrice de l&apos;entreprise</h2>
+              <span className="muted small">7 jours</span>
+            </div>
+            {plotted.length === 0 ? (
+              <p className="muted">Pas encore assez de réponses : une équipe apparaît à partir de 5 réponses par jour.</p>
+            ) : (
+              <>
+                <MatrixPlot
+                  marks={plotted.map((t) => ({ p: { impact: t.impact!, pleasure: t.pleasure! }, title: t.name, label: t.name, color: watch(t) ? "var(--rose-text)" : undefined }))}
+                  label={`Position des équipes : ${plotted.map((t) => `${t.name}, impact ${fmt(t.impact!)}, plaisir ${fmt(t.pleasure!)}`).join(" ; ")}.`}
+                  zones={total ? Object.fromEntries((["dreamer", "thriving", "danger", "robot"] as const).map((z) => [z, <><b>{share(z)} %</b>{ZONES[z].label}</>])) : undefined}
+                />
+                <p className="muted small">Chaque point est une équipe (en rouge : à surveiller). Pourcentages : toutes les réponses de l&apos;entreprise.</p>
+              </>
+            )}
+          </section>
+
+          <section className="panel">
+            <div className="panel-head">
+              <h2>Sujets les plus cités</h2>
+              <span className="muted small">30 jours</span>
+            </div>
+            <ol className="bars">
+              {tags.map((t) => (
+                <li key={t.id}>
+                  <span>{t.label}</span>
+                  <div className="meter" aria-hidden><div style={{ width: `${(t.uses / max) * 100}%` }} /></div>
+                  <span className="small">{t.uses}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+        </div>
       </div>
     </>
   );
