@@ -4,12 +4,17 @@ Mood tracking anonyme pour les équipes, autour du **Miroir** : le manager prono
 
 ```
 supabase/   schéma SQL, règles RLS, fonctions, données de démo
-api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir)
+api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir, back-office admin)
 ```
 
 ## Mise en place
 
-1. **Base** : dans Supabase → SQL Editor, exécuter `supabase/migrations/001_init.sql`, puis `supabase/seed.sql` (démo).
+1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql`, `002_admin.sql`), puis `supabase/seed.sql` (démo).
+   Base déjà en place : exécuter seulement `002_admin.sql`, puis nommer un premier admin :
+   ```sql
+   update profiles set role = 'admin', team_id = null
+   where id = (select id from auth.users where email = 'emma@moodly.test');
+   ```
 2. **API** :
    ```bash
    cd api && npm install && npm run dev
@@ -17,7 +22,7 @@ api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir)
    Les clés Supabase sont dans `api/.env`. Version web sur http://localhost:3000.
 3. **Tests SQL** (Postgres en mémoire, aucune connexion nécessaire) : `npm run test:db` dans `api/`.
 
-Comptes de démo : voir l'en-tête de `supabase/seed.sql`.
+Comptes de démo : voir l'en-tête de `supabase/seed.sql` (`admin@moodly.test` ouvre le back-office sur `/admin`).
 
 ## Authentification
 
@@ -38,12 +43,19 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 | POST | `/api/auth/login` | public | `{ email, password }` | `{ access_token, refresh_token, expires_at }` |
 | POST | `/api/auth/refresh` | public | `{ refresh_token }` | idem |
 | POST | `/api/auth/logout` | tous | | 204, révoque la session (et efface les cookies web) |
-| GET | `/api/me` | tous | | `{ id, role: "employee" \| "manager", team: { id, name } }` |
+| GET | `/api/me` | tous | | `{ id, role: "employee" \| "manager" \| "admin", team: { id, name } \| null }` |
 | GET | `/api/tags` | tous | | `[{ id, label }]` |
 | GET | `/api/moods/today` | collaborateur | | `{ submitted: bool }` |
 | POST | `/api/moods` | collaborateur | `{ score: 1-5, tagIds: [1 à 3 ids] }` | 204 |
 | POST | `/api/predictions` | manager | `{ score: 1-5 }` (ex. 3.5) | 204 |
 | GET | `/api/mirror?days=30` | manager | | voir ci-dessous |
+| GET | `/api/admin` | admin | | `{ stats, teams, users, tags }` (agrégats uniquement) |
+| POST | `/api/admin/users` | admin | `{ email, password, role: "employee" \| "admin", teamId? }` | id du compte |
+| PATCH | `/api/admin/users` | admin | `{ id, role, teamId? }` | 204 |
+| DELETE | `/api/admin/users` | admin | `{ id }` | 204 |
+| POST | `/api/admin/teams` | admin | `{ id?, name, managerId }` (sans id : création) | id de l'équipe |
+| DELETE | `/api/admin/teams` | admin | `{ id }` (efface aussi son historique) | 204 |
+| POST | `/api/admin/tags` | admin | `{ id?, label }` (sans id : création) | 204 |
 
 `/api/mirror` renvoie `{ "needs_prediction": true }` tant que le pronostic de la semaine n'est pas fait. Sinon :
 
@@ -67,3 +79,4 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 - RLS activée sans aucune policy sur `moods` : aucune lecture directe possible, même avec un token valide.
 - Le manager ne voit que des moyennes, à partir de 5 réponses par jour.
 - Le pronostic est obligatoire avant d'afficher le Miroir, et ne peut plus être modifié ensuite.
+- L'admin gère équipes, comptes et tags, mais ne voit que des agrégats : jours passés avec au moins 5 réponses, comme le Miroir. Le rôle manager suit l'équipe (on le nomme depuis l'équipe).

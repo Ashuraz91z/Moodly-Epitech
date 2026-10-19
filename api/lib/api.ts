@@ -5,9 +5,9 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, body?: unknown): Promise<T> {
+export async function api<T>(path: string, body?: unknown, method = "POST"): Promise<T> {
   const init: RequestInit = body === undefined ? {} : {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   };
@@ -18,10 +18,20 @@ export async function api<T>(path: string, body?: unknown): Promise<T> {
   return res.status === 204 ? (null as T) : res.json();
 }
 
-export type Me = { id: string; role: "employee" | "manager"; team: { id: string; name: string } | null };
+export type Role = "employee" | "manager" | "admin";
+export type Me = { id: string; role: Role; team: { id: string; name: string } | null };
 export type Tag = { id: number; label: string };
 export type Day = { day: string; team_avg: number; responses: number };
 export type Week = { week_start: string; prediction: number | null; team_avg: number | null; gap: number | null; dominant_tag: string | null };
 export type Mirror =
   | { needs_prediction: true }
   | { needs_prediction: false; team_size: number; avg_daily_responses: number; days: Day[]; weeks: Week[] };
+
+export type AdminTeam = { id: string; name: string; manager_id: string; size: number; participation: number | null; avg: number | null; trend: { week_start: string; avg: number }[] | null };
+export type AdminUser = { id: string; email: string; role: Role; team_id: string | null; created_at: string; last_sign_in_at: string | null };
+export type Admin = {
+  stats: { avg: number | null; participation: number | null };
+  teams: AdminTeam[];
+  users: AdminUser[];
+  tags: (Tag & { uses: number })[];
+};
