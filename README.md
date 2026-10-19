@@ -9,8 +9,8 @@ api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir, 
 
 ## Mise en place
 
-1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql`, `002_admin.sql`), puis `supabase/seed.sql` (démo).
-   Base déjà en place : exécuter seulement `002_admin.sql`, puis nommer un premier admin :
+1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql`, `002_admin.sql`, `003_matrix.sql`), puis `supabase/seed.sql` (démo).
+   Base déjà en place : exécuter seulement les migrations manquantes. Après `002_admin.sql`, nommer un premier admin :
    ```sql
    update profiles set role = 'admin', team_id = null
    where id = (select id from auth.users where email = 'emma@moodly.test');
@@ -46,7 +46,7 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 | GET | `/api/me` | tous | | `{ id, role: "employee" \| "manager" \| "admin", team: { id, name } \| null }` |
 | GET | `/api/tags` | tous | | `[{ id, label }]` |
 | GET | `/api/moods/today` | collaborateur | | `{ submitted: bool }` |
-| POST | `/api/moods` | collaborateur | `{ score: 1-5, tagIds: [1 à 3 ids] }` | 204 |
+| POST | `/api/moods` | collaborateur | `{ impact: 1-5, pleasure: 1-5, tagIds: [1 à 3 ids] }` (ancien format `{ score }` encore accepté) | 204 |
 | POST | `/api/predictions` | manager | `{ score: 1-5 }` (ex. 3.5) | 204 |
 | GET | `/api/mirror?days=30` | manager | | voir ci-dessous |
 | GET | `/api/admin` | admin | | `{ stats, teams, users, tags }` (agrégats uniquement) |
@@ -64,12 +64,16 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
   "needs_prediction": false,
   "team_size": 8,
   "avg_daily_responses": 6.9,
+  "matrix": { "responses": 48, "impact": 3.5, "pleasure": 3.9,
+              "zones": { "thriving": 17, "dreamer": 9, "robot": 4, "danger": 2, "middle": 16 } },
   "days":  [{ "day": "2026-10-13", "team_avg": 4.29, "responses": 7 }],
   "weeks": [{ "week_start": "2026-10-12", "prediction": 3.5, "team_avg": 4.31,
               "gap": -0.81, "dominant_tag": null }]
 }
 ```
 
+- Matrice du bonheur au travail : chaque réponse est un point (impact, plaisir). `team_avg` est la moyenne des deux axes.
+- `matrix` : 7 derniers jours sans aujourd'hui, jours d'au moins 5 réponses ; `null` sinon. Zones : `thriving` (impact et plaisir > 3), `dreamer` (impact < 3, plaisir > 3), `robot` (impact > 3, plaisir < 3), `danger` (les deux < 3), `middle` (un axe à 3).
 - `days` : moyenne quotidienne, seulement pour les jours avec au moins 5 réponses.
 - `weeks` : `gap = prediction - team_avg` (positif : le manager surestime). `dominant_tag` est rempli quand `|gap| > 1,5`.
 

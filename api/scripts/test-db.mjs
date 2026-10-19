@@ -51,14 +51,15 @@ await fails("42501", "anon", null, "select get_mirror()");
 
 // Saisie collaborateur.
 assert.equal((await as("authenticated", INES, "select has_submitted_today() v"))[0].v, false);
-await as("authenticated", INES, "select submit_mood(2, array[1, 3, 3])");
+await as("authenticated", INES, "select submit_mood(2, 4, array[1, 3, 3])");
 assert.equal((await as("authenticated", INES, "select has_submitted_today() v"))[0].v, true);
-await fails("23505", "authenticated", INES, "select submit_mood(4, array[2])");
-await fails("22023", "authenticated", LEA, "select submit_mood(6, array[1])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, array[]::int[])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, array[1, 2, 3, 4])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, array[99])");
-await fails("42501", "authenticated", THOMAS, "select submit_mood(3, array[1])");
+await fails("23505", "authenticated", INES, "select submit_mood(4, 4, array[2])");
+await fails("22023", "authenticated", LEA, "select submit_mood(6, 3, array[1])");
+await fails("22023", "authenticated", LEA, "select submit_mood(3, 0, array[1])");
+await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, array[]::int[])");
+await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, array[1, 2, 3, 4])");
+await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, array[99])");
+await fails("42501", "authenticated", THOMAS, "select submit_mood(3, 3, array[1])");
 
 // Miroir : réservé au manager, pronostic d'abord, une seule fois par semaine.
 await fails("42501", "authenticated", INES, "select get_mirror()");
@@ -75,6 +76,12 @@ assert.ok(!m.days.some((d) => "score" in d || "entry_key" in d));
 const old = m.weeks.find((w) => w.gap > 1.5);
 assert.equal(old?.dominant_tag, "Charge de travail", "angle mort détecté sur les premières semaines");
 assert.equal(m.weeks.at(-1).prediction, 3.5);
+
+// Matrice : agrégats des 7 derniers jours affichés, chaque réponse dans une seule zone.
+const z = m.matrix.zones;
+assert.equal(z.thriving + z.dreamer + z.danger + z.robot + z.middle, m.matrix.responses);
+assert.ok(m.matrix.impact >= 1 && m.matrix.impact <= 5 && m.matrix.pleasure >= 1 && m.matrix.pleasure <= 5);
+assert.ok(z.thriving > z.danger, "l'équipe est remontée vers l'épanouissement");
 
 // Semaines = moyenne pondérée des seuls jours affichés (pas de fuite des jours sous le seuil).
 for (const w of m.weeks.filter((w) => w.team_avg != null)) {

@@ -8,7 +8,7 @@ import { Logout } from "../logout";
 import { Overview, Tags, Teams, Users, type Run } from "./sections";
 
 const TABS: { id: string; label: string; icon: IconName }[] = [
-  { id: "apercu", label: "Vue d'ensemble", icon: "chart" },
+  { id: "apercu", label: "Aperçu", icon: "chart" },
   { id: "equipes", label: "Équipes", icon: "users" },
   { id: "comptes", label: "Comptes", icon: "user" },
   { id: "tags", label: "Tags", icon: "tag" },

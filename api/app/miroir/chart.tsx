@@ -8,7 +8,6 @@ export const FORECAST = "#7c3aed";
 const GRID = "#f1ebfb";
 const AXIS = "#475569";
 const DAYS = 30;
-const H = 240;
 const M = { top: 34, right: 12, bottom: 26, left: 26 };
 const MS = 864e5;
 
@@ -20,6 +19,7 @@ const label = (t: number) => new Date(t).toLocaleDateString("fr-FR", { day: "num
 export function MirrorChart({ days, weeks, today }: { days: Day[]; weeks: Week[]; today: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(600);
+  const H = W > 700 ? 300 : 240;
   const [hover, setHover] = useState<number | null>(null);
 
   useEffect(() => {

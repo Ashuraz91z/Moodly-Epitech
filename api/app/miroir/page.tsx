@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, type Mirror } from "@/lib/api";
 import { Logout } from "../logout";
 import { Icon, Loader, type IconName } from "../icons";
+import { TeamMatrix } from "../matrix";
 import { FORECAST, MirrorChart, TEAM, fmt, todayInParis } from "./chart";
 
 const ACTIONS: Record<string, string[]> = {
@@ -87,7 +88,7 @@ function Forecast({ onDone }: { onDone: () => void }) {
       </div>
       <div className="card">
         <strong>Pourquoi ce pronostic ?</strong>
-        <p>Le Miroir compare ta perception au ressenti réel de l&apos;équipe. Un seul pronostic par semaine : il ne pourra plus être modifié.</p>
+        <p>Le Miroir compare ta perception au ressenti réel de l&apos;équipe : la moyenne de son plaisir et de son impact sur la matrice. Un seul pronostic par semaine : il ne pourra plus être modifié.</p>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       <button className="btn dark" disabled={busy} onClick={send}>{busy ? "Révélation…" : "Révéler le Miroir"}</button>
@@ -148,7 +149,7 @@ export default function Miroir() {
         </div>
       </div>
 
-      <div>
+      <div className="chart-block">
         <div className="legend">
           <span><svg width="22" height="4"><line x2="22" y1="2" y2="2" stroke={TEAM} strokeWidth="3" /></svg>Équipe</span>
           <span><svg width="22" height="4"><line x2="22" y1="2" y2="2" stroke={FORECAST} strokeWidth="3" strokeDasharray="6 4" /></svg>Mon pronostic</span>
@@ -162,22 +163,33 @@ export default function Miroir() {
         )}
       </div>
 
-      {blind ? (
-        <div className="alert-card" role="status">
-          <Icon name="alert" size={24} />
-          <div>
-            <h2>Angle mort détecté</h2>
-            <p>
-              Ton équipe va {gap! > 0 ? "moins bien" : "mieux"} que tu ne le penses.
-              {gap! > 0 && week?.dominant_tag && <> Tag dominant : <strong>{week.dominant_tag}</strong></>}
-            </p>
-          </div>
-        </div>
-      ) : gap != null ? (
-        <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception est proche du ressenti de l&apos;équipe cette semaine.</div>
-      ) : null}
+      <section className="matrix-block">
+        <h2>Matrice de l&apos;équipe <small>7 derniers jours</small></h2>
+        {mirror.matrix ? (
+          <TeamMatrix data={mirror.matrix} />
+        ) : (
+          <p className="note">Pas encore assez de réponses : la matrice s&apos;affiche à partir de 5 réponses par jour.</p>
+        )}
+      </section>
 
-      {blind && actions.length > 0 && <Checklist key={week!.week_start} actions={actions} week={week!.week_start} />}
+      <div className="miroir-side">
+        {blind ? (
+          <div className="alert-card" role="status">
+            <Icon name="alert" size={24} />
+            <div>
+              <h2>Angle mort détecté</h2>
+              <p>
+                Ton équipe va {gap! > 0 ? "moins bien" : "mieux"} que tu ne le penses.
+                {gap! > 0 && week?.dominant_tag && <> Tag dominant : <strong>{week.dominant_tag}</strong></>}
+              </p>
+            </div>
+          </div>
+        ) : gap != null ? (
+          <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception est proche du ressenti de l&apos;équipe cette semaine.</div>
+        ) : null}
+
+        {blind && actions.length > 0 && <Checklist key={week!.week_start} actions={actions} week={week!.week_start} />}
+      </div>
 
       <details>
         <summary>Voir les données du graphe</summary>
