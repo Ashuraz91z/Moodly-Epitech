@@ -22,7 +22,9 @@ api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir, 
    Les clés Supabase sont dans `api/.env`. Version web sur http://localhost:3000.
 3. **Tests** (aucune connexion nécessaire) : `npm run test:db` (SQL sur un Postgres en mémoire) et `npm run test:csv` (export CSV) dans `api/`.
 
-Comptes de démo : voir l'en-tête de `supabase/seed.sql` (`admin@moodly.test` ouvre le back-office sur `/admin`).
+Démo enrichie (back-office avec 3 équipes) : exécuter ensuite `supabase/demo_plus.sql`, rejouable sans doublon.
+
+Comptes de démo (mot de passe `moodly-demo`) : voir les en-têtes de `supabase/seed.sql` et `supabase/demo_plus.sql`. `admin@moodly.test` ouvre le back-office sur `/admin` ; `thomas@`, `marc@` et `lina@moodly.test` sont managers.
 
 ## Authentification
 

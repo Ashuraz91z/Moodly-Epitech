@@ -29,6 +29,9 @@ for (const f of readdirSync(`${root}/supabase/migrations`).sort()) {
   await db.exec(readFileSync(`${root}/supabase/migrations/${f}`, "utf8"));
 }
 await db.exec(readFileSync(`${root}/supabase/seed.sql`, "utf8"));
+const demoPlus = readFileSync(`${root}/supabase/demo_plus.sql`, "utf8");
+await db.exec(demoPlus);
+await db.exec(demoPlus); // rejouable : ne crée rien de plus
 
 const THOMAS = "00000000-0000-0000-0000-000000000001";
 const INES = "00000000-0000-0000-0000-000000000002";
@@ -115,12 +118,17 @@ for (const w of m.weeks.filter((w) => w.team_avg != null)) {
 await fails("42501", "authenticated", THOMAS, "select admin_dashboard()");
 await fails("42501", "authenticated", INES, "select admin_create_user('x@y.fr', 'motdepasse', 'employee')");
 const dash = (await as("authenticated", ADMIN, "select admin_dashboard() d"))[0].d;
-assert.equal(dash.users.length, 10);
-assert.equal(dash.teams[0].size, 8);
-assert.ok(dash.teams[0].avg > 0 && dash.teams[0].participation > 0.5);
+assert.equal(dash.users.length, 26, "seed + démo enrichie, sans doublon");
+assert.equal(dash.teams.length, 3);
+const produit = dash.teams.find((t) => t.id === TEAM);
+assert.equal(produit.size, 8);
+assert.ok(produit.avg > 0 && produit.participation > 0.5);
+const support = dash.teams.find((t) => t.name === "Support client");
+assert.ok(support.impact > 3.5 && support.pleasure < 2.6, "Support : zone Robot");
+assert.ok(dash.teams.find((t) => t.name === "Data & IA").pleasure > 3.5);
 assert.ok(dash.tags.some((t) => t.uses > 0));
 assert.ok(!JSON.stringify(dash).includes("entry_key") && !JSON.stringify(dash).includes("score"), "aucune réponse brute");
-assert.ok(dash.teams[0].impact > 0 && dash.teams[0].pleasure > 0);
+assert.ok(produit.impact > 0 && produit.pleasure > 0);
 assert.ok(Object.values(dash.stats.zones).reduce((x, y) => x + y, 0) > 0);
 
 // Comptes.
@@ -144,7 +152,7 @@ await fails("22023", "authenticated", ADMIN, "select admin_save_team(null, 'Admi
 await as("authenticated", ADMIN, "select admin_delete_team($1)", [OPS]);
 assert.deepEqual((await as("authenticated", THOMAS, "select role, team_id from profiles"))[0], { role: "employee", team_id: null });
 await as("authenticated", ADMIN, "select admin_delete_user($1)", [THOMAS]);
-assert.equal((await as("authenticated", ADMIN, "select admin_dashboard() d"))[0].d.users.length, 10);
+assert.equal((await as("authenticated", ADMIN, "select admin_dashboard() d"))[0].d.users.length, 26);
 
 // Tags.
 await as("authenticated", ADMIN, "select admin_save_tag(null, 'Formation')");
