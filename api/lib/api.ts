@@ -1,4 +1,4 @@
-import type { EnergyZone, Zone } from "@/app/matrix";
+import type { Zone } from "@/app/matrix";
 import type { FactorKey } from "@/app/questionnaire";
 
 // Appels à l'API depuis la version web (cookies httpOnly envoyés automatiquement).
@@ -32,14 +32,15 @@ export type Mirror =
 // Dernière semaine close de l'équipe (au moins 5 réponses) : point, 2 matrices, facteurs, tendance, sujets.
 export type LastWeek = {
   week_start: string; responses: number; team_avg: number; impact: number; pleasure: number; energy: number;
-  zones: Partial<Record<Zone, number>>; energy_zones: Partial<Record<EnergyZone, number>>; tags: string[];
+  // zones : matrice plaisir × impact (non affichée) ; energy_zones : la matrice plaisir × énergie.
+  zones: Record<string, number>; energy_zones: Partial<Record<Zone, number>>; tags: string[];
   factors: Record<FactorKey, number> | null; trend: { better: number; same: number; worse: number } | null;
 };
 
 export type AdminTeam = { id: string; name: string; manager_id: string; size: number; participation: number | null; avg: number | null; impact: number | null; pleasure: number | null; energy: number | null; trend: { week_start: string; avg: number }[] | null };
 export type AdminUser = { id: string; email: string; role: Role; team_id: string | null; created_at: string; last_sign_in_at: string | null };
 export type Admin = {
-  stats: { week_start: string; avg: number | null; participation: number | null; zones: Partial<Record<Zone, number>> | null; energy_zones: Partial<Record<EnergyZone, number>> | null };
+  stats: { week_start: string; avg: number | null; participation: number | null; zones: Record<string, number> | null; energy_zones: Partial<Record<Zone, number>> | null };
   teams: AdminTeam[];
   users: AdminUser[];
   tags: (Tag & { uses: number })[];

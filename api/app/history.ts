@@ -55,8 +55,8 @@ export function seedDemoHistory(today: string, keep = false) {
   const h: History = {};
   weeks.forEach((w, idx) => {
     const k = weeks.length - idx; // semaines avant la semaine en cours
-    if (Math.random() < 0.1) return;
-    // Comme son équipe : efficace mais épuisée (Robot), transition, puis épanouie.
+    if (k > 2 && Math.random() < 0.1) return; // un trou de temps en temps, jamais sur la série récente
+    // Comme son équipe : à bout (charge de travail), transition, puis en forme.
     const [p, e, i] = k > 5 ? [1.8, 2.2, 4.2] : k > 3 ? [3, 3, 4] : [4.2, 4, 4.3];
     h[w] = { pleasure: n(p), energy: n(e), impact: n(i), answers: [n(e), n(e), n(i), n(6 - p), n(p), n(p), n(i), n(i), n(p)] };
   });

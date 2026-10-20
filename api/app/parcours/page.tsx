@@ -6,18 +6,17 @@ import { api, type Me } from "@/lib/api";
 import { downloadCsv } from "@/lib/csv";
 import { lastWeeks, mondayOf, readHistory, streak, type History } from "../history";
 import { Icon, Loader } from "../icons";
-import { AxisSwitch, ENERGY_ZONES, MatrixPlot, ZONES, energyZoneOf, zoneOf, type Axis, type Zone } from "../matrix";
+import { MatrixPlot, Usefulness, ZONES, zoneOf, type Zone } from "../matrix";
 import { fmt, todayInParis } from "../miroir/chart";
 import { fromAnswers } from "../questionnaire";
 
 const WEEKS = 12;
-const ORDER: Zone[] = ["thriving", "dreamer", "middle", "robot", "danger"];
+const ORDER: Zone[] = ["enthusiasm", "serenity", "middle", "tension", "dejection"];
 const short = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
 
 // Mon parcours : lu uniquement depuis cet appareil, rien n'est demandé au serveur à part l'identité.
 export default function Parcours() {
   const [history, setHistory] = useState<History | null>(null);
-  const [axis, setAxis] = useState<Axis>("impact");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -35,7 +34,8 @@ export default function Parcours() {
   const max = Math.max(1, ...Object.values(counts));
   const run = streak(history, today);
   const label = (w: string) => (w === thisWeek ? "Cette semaine" : `Sem. du ${short(w)}`);
-  const zoneLabel = (w: string) => (axis === "impact" ? ZONES[zoneOf(history[w])] : ENERGY_ZONES[energyZoneOf(history[w])]).label;
+  const zoneLabel = (w: string) => ZONES[zoneOf(history[w])].label;
+  const avgImpact = answered.reduce((s, w) => s + history[w].impact, 0) / (answered.length || 1);
 
   // Ressenti face aux réponses : écart moyen du moral (moyenne des 3 axes) sur les semaines comparables.
   const compared = answered.filter((w) => history[w].answers);
@@ -44,10 +44,10 @@ export default function Parcours() {
 
   function exportCsv() {
     downloadCsv("moodly-mon-parcours", [
-      ["Semaine du", "Plaisir", "Énergie", "Impact", "Zone (impact)", "Zone (énergie)", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11"],
+      ["Semaine du", "Plaisir", "Énergie", "Utilité", "Zone", "Q3", "Q4", "Q5", "Q6", "Q7", "Q8", "Q9", "Q10", "Q11"],
       ...Object.keys(history!).sort().map((w) => {
         const e = history![w];
-        return [w, e.pleasure, e.energy, e.impact, ZONES[zoneOf(e)].label, ENERGY_ZONES[energyZoneOf(e)].label, ...(e.answers ?? [])];
+        return [w, e.pleasure, e.energy, e.impact, ZONES[zoneOf(e)].label, ...(e.answers ?? [])];
       }),
     ]);
   }
@@ -72,19 +72,15 @@ export default function Parcours() {
       ) : (
         <>
           <section>
-            <div className="panel-head">
-              <h2>Ta trajectoire</h2>
-              <AxisSwitch axis={axis} onChange={setAxis} />
-            </div>
+            <h2>Ta trajectoire</h2>
             <MatrixPlot
               trail
-              axis={axis}
               label={`Ta trajectoire sur la matrice : ${answered.map((w) => `${label(w)}, ${zoneLabel(w)}`).join(" ; ")}.`}
               marks={answered.map((w, i) => ({
                 p: history[w],
                 title: `${label(w)} : ${zoneLabel(w)}`,
                 label: i === answered.length - 1 ? label(w) : undefined,
-                color: (axis === "impact" ? ZONES[zoneOf(history[w])] : ENERGY_ZONES[energyZoneOf(history[w])]).color,
+                color: ZONES[zoneOf(history[w])].color,
               }))}
             />
             <p className="muted small">
@@ -92,6 +88,7 @@ export default function Parcours() {
                 ? "Ton parcours se dessine semaine après semaine : ta trajectoire apparaîtra ici."
                 : "Chaque point est une semaine, là où tu t'es placé·e ; le plus marqué est le plus récent."}
             </p>
+            <Usefulness rows={[{ label: `Moyenne sur ${answered.length} semaine${answered.length > 1 ? "s" : ""}`, value: avgImpact }]} />
           </section>
 
           <div className="parcours-side">
@@ -101,7 +98,7 @@ export default function Parcours() {
               <div className="tile zone" style={{ background: `color-mix(in srgb, ${ZONES[top].color} 30%, #fff)` }}>
                 <span>Zone la plus fréquente · {counts[top]} semaine{counts[top] > 1 ? "s" : ""} sur {answered.length}</span>
                 <strong className="zone-name">{ZONES[top].label}</strong>
-                <span>{ZONES[top].text || "Impact ou plaisir moyen : ni une zone ni l'autre."}</span>
+                <span>{ZONES[top].text}</span>
               </div>
               {gap != null && (
                 <div className="tile zone">

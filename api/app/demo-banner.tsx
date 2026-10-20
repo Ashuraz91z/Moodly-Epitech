@@ -21,7 +21,7 @@ const STEPS = [
   {
     as: "admin", label: "RH", paths: ["/admin"],
     who: "Tu es l'admin RH de l'entreprise.",
-    todo: "Toutes les équipes sur la matrice (impact ou énergie) : Support client est efficace mais épuisé alors que son manager le croit en forme. Comptes, sujets et exports dans les onglets.",
+    todo: "Toutes les équipes sur la matrice : Support client est à bout alors que son manager le croit en forme. Comptes, sujets et exports dans les onglets.",
   },
 ];
 

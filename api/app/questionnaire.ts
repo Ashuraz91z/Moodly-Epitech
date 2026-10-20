@@ -19,7 +19,7 @@ export const TRENDS = [
   { value: 0, label: "Pareille" },
   { value: 1, label: "Meilleure" },
 ];
-export const ENERGY = ["À plat", "Fatigué·e", "Normal", "En forme", "Plein d'énergie"];
+export const USEFUL = ["Pas du tout", "Un peu", "Moyennement", "Plutôt", "Tout à fait"];
 
 // 5 = toujours favorable (Q6 inversée).
 const note = (answers: number[], i: number) => (i === 3 ? 6 - answers[i] : answers[i]);
