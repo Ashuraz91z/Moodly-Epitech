@@ -5,7 +5,7 @@ import { api, type Admin, type AdminTeam, type AdminUser } from "@/lib/api";
 import { downloadCsv } from "@/lib/csv";
 import { Icon } from "../icons";
 import { fmt } from "../miroir/chart";
-import { AxisSwitch, ENERGY_ZONES, MatrixPlot, ZONES, type Axis } from "../matrix";
+import { MatrixPlot, zoneShares } from "../matrix";
 
 export type Run = (fn: () => Promise<unknown>, ok: string, inline?: boolean) => Promise<string | null>;
 type Props = { data: Admin; run: Run };
@@ -13,7 +13,7 @@ type Props = { data: Admin; run: Run };
 const pct = (n: number | null) => (n == null ? "—" : `${Math.round(n * 100)} %`);
 const date = (d: string | null) => (d ? new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" }) : "Jamais");
 const health = (avg: number | null) => (avg == null ? "none" : avg >= 3.4 ? "good" : avg >= 2.6 ? "mid" : "low");
-// À surveiller : moral bas, plaisir bas (zone Robot ou danger, risque d'épuisement) ou peu de réponses.
+// À surveiller : moral bas, plaisir bas (sous pression ou à bout, risque d'épuisement) ou peu de réponses.
 const watch = (t: AdminTeam) =>
   (t.avg != null && t.avg < 2.6) || (t.pleasure != null && t.pleasure < 2.5) || (t.participation != null && t.participation < 0.5);
 const ROLE = { employee: "Collaborateur", manager: "Manager", admin: "Admin" };
@@ -70,15 +70,9 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
   const flagged = data.teams.filter(watch);
   const tags = [...data.tags].sort((a, b) => b.uses - a.uses);
   const max = Math.max(1, ...tags.map((t) => t.uses));
-  const plotted = data.teams.filter((t) => t.impact != null && t.pleasure != null);
-  const [axis, setAxis] = useState<Axis>("impact");
-  const zones: Record<string, number> = (axis === "impact" ? data.stats.zones : data.stats.energy_zones) ?? {};
-  const total = Object.values(zones).reduce((a, b) => a + b, 0);
-  const share = (z: string) => Math.round(((zones[z] ?? 0) / total) * 100);
-  // Coins de la matrice : haut-gauche, haut-droite, bas-gauche, bas-droite.
-  const corners = axis === "impact"
-    ? { tl: ["dreamer", ZONES.dreamer], tr: ["thriving", ZONES.thriving], bl: ["danger", ZONES.danger], br: ["robot", ZONES.robot] }
-    : { tl: ["serenity", ENERGY_ZONES.serenity], tr: ["enthusiasm", ENERGY_ZONES.enthusiasm], bl: ["dejection", ENERGY_ZONES.dejection], br: ["tension", ENERGY_ZONES.tension] } as const;
+  const plotted = data.teams.filter((t) => t.energy != null && t.pleasure != null);
+  const zones = data.stats.energy_zones ?? {};
+  const total = Object.values(zones).reduce((a: number, b) => a + (b ?? 0), 0);
   const week = new Date(data.stats.week_start).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
 
   // Résumé par équipe (dernière semaine close, tendance sur 8 semaines), puis sujets.
@@ -118,7 +112,7 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
         <div className="kpi">
           <span>Participation</span>
           <strong>{pct(data.stats.participation)}</strong>
-          <small>des collaborateurs répondent chaque jour</small>
+          <small>des collaborateurs ont répondu cette semaine-là</small>
         </div>
         <div className="kpi">
           <span>Moral moyen</span>
@@ -166,17 +160,16 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
           <section className="panel">
             <div className="panel-head">
               <h2>Matrice de l&apos;entreprise</h2>
-              <AxisSwitch axis={axis} onChange={setAxis} />
+              <span className="muted small">plaisir × énergie</span>
             </div>
             {plotted.length === 0 ? (
               <p className="muted">Pas encore assez de réponses : une équipe apparaît à partir de 5 réponses dans une semaine close.</p>
             ) : (
               <>
                 <MatrixPlot
-                  axis={axis}
-                  marks={plotted.map((t) => ({ p: { impact: t.impact!, pleasure: t.pleasure!, energy: t.energy ?? undefined }, title: t.name, label: t.name, color: watch(t) ? "var(--rose-text)" : undefined }))}
-                  label={`Position des équipes : ${plotted.map((t) => `${t.name}, impact ${fmt(t.impact!)}, plaisir ${fmt(t.pleasure!)}`).join(" ; ")}.`}
-                  zones={total ? Object.fromEntries(Object.entries(corners).map(([c, [k, z]]) => [c, <><b>{share(k)} %</b>{z.label}</>])) : undefined}
+                  marks={plotted.map((t) => ({ p: { impact: t.impact ?? 0, pleasure: t.pleasure!, energy: t.energy! }, title: t.name, label: t.name, color: watch(t) ? "var(--rose-text)" : undefined }))}
+                  label={`Position des équipes : ${plotted.map((t) => `${t.name}, plaisir ${fmt(t.pleasure!)}, énergie ${fmt(t.energy!)}`).join(" ; ")}.`}
+                  zones={total ? zoneShares(zones, total) : undefined}
                 />
                 <p className="muted small">Chaque point est une équipe (en rouge : à surveiller). Pourcentages : toutes les réponses de la semaine.</p>
               </>

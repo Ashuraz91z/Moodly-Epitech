@@ -9,7 +9,7 @@ import { Logout } from "../logout";
 import { Icon, Loader } from "../icons";
 import { Compare, MatrixInput, ZONES, zoneOf, type Point } from "../matrix";
 import { ONBOARDING_KEY, historyKey, lastWeeks, mondayOf, readHistory, streak, type Entry, type History } from "../history";
-import { AGREE, ENERGY, STATEMENTS, TRENDS, compareText, factorsOf, fromAnswers, needsHelp } from "../questionnaire";
+import { AGREE, STATEMENTS, TRENDS, USEFUL, compareText, factorsOf, fromAnswers, needsHelp } from "../questionnaire";
 
 type Step = "loading" | "onboarding" | "closed" | "questions" | "self" | "done";
 type WeekStatus = { submitted: boolean; open: boolean; opens_on: string };
@@ -112,7 +112,7 @@ export default function Saisie() {
   const [trend, setTrend] = useState<number | null>(null);
   const [picked, setPicked] = useState<number[]>([]);
   const [point, setPoint] = useState<Point | null>(null);
-  const [energy, setEnergy] = useState<number | null>(null);
+  const [impact, setImpact] = useState<number | null>(null);
   const [history, setHistory] = useState<History>({});
   const [userId, setUserId] = useState("");
   const [error, setError] = useState("");
@@ -151,8 +151,8 @@ export default function Saisie() {
     setBusy(true);
     const all = answers as number[];
     try {
-      await api("/api/moods", { pleasure: point!.pleasure, energy, impact: point!.impact, answers: all, trend, tagIds: picked });
-      const entry: Entry = { impact: point!.impact, pleasure: point!.pleasure, energy: energy!, answers: all };
+      await api("/api/moods", { pleasure: point!.pleasure, energy: point!.energy, impact, answers: all, trend, tagIds: picked });
+      const entry: Entry = { impact: impact!, pleasure: point!.pleasure, energy: point!.energy!, answers: all };
       const next = { ...readHistory(userId), [mondayOf(todayInParis())]: entry };
       try { localStorage.setItem(historyKey(userId), JSON.stringify(next)); } catch {}
       setHistory(next);
@@ -206,26 +206,26 @@ export default function Saisie() {
 
   if (step === "self") {
     const mood = point ? ZONES[zoneOf(point)] : null;
-    const ready = point && energy;
+    const ready = point && impact;
     return (
       <main className={`screen saisie${mood ? " mood" : ""}`} style={mood ? ({ "--mood": mood.color } as React.CSSProperties) : undefined}>
         <Header />
         <div className="intro">
           <p className="step-label">Étape 2 sur 2 · Ton ressenti</p>
           <h1>Et toi, où te situes-tu cette semaine ?</h1>
-          <p className="sub">Avant de voir ce que disent tes réponses, place-toi toi-même : ton plaisir au travail, et ton sentiment d&apos;avoir été utile.</p>
+          <p className="sub">Avant de voir ce que disent tes réponses, place-toi toi-même : le plaisir que tu as pris au travail, et ton énergie.</p>
         </div>
         <MatrixInput value={point} onChange={setPoint} />
         <div className="saisie-side">
           <fieldset className="segmented energy">
-            <legend>Et ton niveau d&apos;énergie ?</legend>
-            {ENERGY.map((label, i) => (
-              <label key={label}><input type="radio" name="energy" checked={energy === i + 1} onChange={() => setEnergy(i + 1)} />{label}</label>
+            <legend>Et as-tu eu le sentiment d&apos;être utile ?</legend>
+            {USEFUL.map((label, i) => (
+              <label key={label}><input type="radio" name="impact" checked={impact === i + 1} onChange={() => setImpact(i + 1)} />{label}</label>
             ))}
           </fieldset>
           {error && <p className="error" role="alert">{error}</p>}
           <button className="btn" disabled={!ready || busy} onClick={send}>{busy ? "Envoi…" : "Voir ce que disent mes réponses"}</button>
-          {!ready && <p className="hint">{!point ? "Place ton point sur la matrice." : "Indique ton niveau d'énergie."}</p>}
+          {!ready && <p className="hint">{!point ? "Place ton point sur la matrice." : "Dis si tu t'es senti·e utile."}</p>}
           <button className="link" onClick={() => go("questions")}>← Revoir mes réponses</button>
         </div>
       </main>

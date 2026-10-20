@@ -89,7 +89,7 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 
 - Une semaine (lundi → dimanche) n'est publiée qu'une fois close et avec au moins 5 réponses ; la semaine en cours ne montre que son nombre de réponses.
 - Moral (`team_avg`) = moyenne des trois axes ; `gap = prediction - team_avg` (positif : le manager surestimait), angle mort au-delà de 1,5.
-- Deux matrices partagent le plaisir : × impact (`zones` : `thriving`, `dreamer`, `robot`, `danger`) et × énergie (`energy_zones` : `enthusiasm`, `serenity`, `tension`, `dejection`) ; `middle` = un axe à 3.
+- La matrice affichée est plaisir × énergie (`energy_zones` : `enthusiasm` « En forme », `serenity` « Serein·e », `tension` « Sous pression », `dejection` « À bout », `middle` « Mitigé », un axe à 3). Le 3e axe, l'impact (sentiment d'avoir été utile), s'affiche en jauge. `zones` (plaisir × impact) reste fourni mais n'est pas affiché.
 - `factors` : les 6 facteurs de risques psychosociaux (Gollac) sur Q3 à Q11, de 1 à 5 (5 = favorable, Q6 inversée).
 
 ## Questionnaire hebdomadaire
@@ -97,8 +97,8 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 Ouvert le **jeudi et le vendredi** (les comptes de démo y échappent), une réponse par semaine, environ 2 minutes :
 
 1. 9 affirmations « Cette semaine… » (Q3 à Q11), la tendance par rapport à la semaine d'avant (Q12) et 1 à 3 sujets (Q13).
-2. Le collaborateur se place lui-même : un point sur la matrice plaisir × impact et son niveau d'énergie.
-3. On lui montre ensuite où ses réponses le situent (énergie : Q3 Q4 ; impact : Q5 Q9 Q10 ; plaisir : Q6 inversée, Q7 Q8 Q11) face à là où il s'est placé, dans les deux matrices. Cette comparaison reste sur son appareil.
+2. Le collaborateur se place lui-même : un point sur la matrice plaisir × énergie, et s'il s'est senti utile (impact).
+3. On lui montre ensuite où ses réponses le situent (énergie : Q3 Q4 ; impact : Q5 Q9 Q10 ; plaisir : Q6 inversée, Q7 Q8 Q11) face à là où il s'est placé, sur la matrice et la jauge d'utilité. Cette comparaison reste sur son appareil.
 
 ## Anonymat
 
@@ -110,6 +110,6 @@ Ouvert le **jeudi et le vendredi** (les comptes de démo y échappent), une rép
 
 ## Version web
 
-- **Collaborateur** (`/saisie`) : questionnaire de la semaine, placement sur la matrice et comparaison avec ses réponses. `/parcours` : sa trajectoire (impact ou énergie), sa série et sa répartition sur 12 semaines, l'écart moyen entre son ressenti et ses réponses, export CSV. Ces données restent dans le navigateur (jamais envoyées).
-- **Manager** (`/miroir`) : pronostic, graphe semaine par semaine, trajectoire de l'équipe sur les deux matrices, 6 facteurs de risques psychosociaux, tendance et sujets, plan d'action enregistré en base (suggestions, suivi, effet sur le moral la semaine suivante), export CSV et rapport PDF (impression).
-- **Admin** (`/admin`) : équipes, comptes, sujets, matrice de l'entreprise (un point par équipe, impact ou énergie), export CSV et rapport PDF.
+- **Collaborateur** (`/saisie`) : questionnaire de la semaine, placement sur la matrice et comparaison avec ses réponses. `/parcours` : sa trajectoire sur la matrice, son utilité ressentie, sa série et sa répartition sur 12 semaines, l'écart moyen entre son ressenti et ses réponses, export CSV. Ces données restent dans le navigateur (jamais envoyées).
+- **Manager** (`/miroir`) : pronostic, graphe semaine par semaine, trajectoire de l'équipe sur la matrice, utilité ressentie, 6 facteurs de risques psychosociaux, tendance et sujets, plan d'action enregistré en base (suggestions, suivi, effet sur le moral la semaine suivante), export CSV et rapport PDF (impression).
+- **Admin** (`/admin`) : équipes, comptes, sujets, matrice de l'entreprise (un point par équipe), export CSV et rapport PDF.

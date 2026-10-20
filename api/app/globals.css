@@ -504,8 +504,14 @@ body:has(.demo-float) .screen { padding-bottom: 96px; }
 .done-head .done-check { flex: none; width: 56px; height: 56px; }
 .done-head h1 { margin-bottom: 8px; }
 .done-head .sub { margin: 0; }
-.compare { display: grid; gap: 16px; }
-@media (min-width: 640px) { .compare { grid-template-columns: 1fr 1fr; } }
+.compare { display: grid; gap: 16px; align-items: center; }
+@media (min-width: 640px) { .compare { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); } }
+.usefulness { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 16px; }
+.usefulness-title { font-size: 14px; font-weight: 600; }
+.usefulness-row { display: grid; grid-template-columns: minmax(6em, auto) 1fr 52px; align-items: center; gap: 12px; font-size: 14px; }
+.usefulness .meter { max-width: none; margin: 0; height: 8px; }
+.usefulness-row .small { text-align: right; font-variant-numeric: tabular-nums; }
+.team-matrix .usefulness { max-width: 420px; }
 .compare figure { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 .compare figcaption { display: flex; flex-direction: column; gap: 2px; }
 .compare figcaption span { color: var(--muted); font-size: 13px; }
