@@ -44,22 +44,32 @@ async function fails(code, ...args) {
   await assert.rejects(as(...args), (e) => e.code === code || assert.fail(`${e.code} ${e.message}`));
 }
 
+// Questionnaire hebdomadaire : point perçu (plaisir, énergie, impact) + Q3 à Q11 + tendance + sujets.
+const Q = (p = 4, e = 4, i = 4, answers = "array[4,4,4,2,4,4,4,4,4]", trend = 1, tags = "array[1, 3, 3]") =>
+  `select submit_mood(${p}, ${e}, ${i}, ${answers}, ${trend}, ${tags})`;
+const isodow = ((new Date(new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" })).getUTCDay() + 6) % 7) + 1;
+const windowOpen = isodow === 4 || isodow === 5;
+
 // Personne ne lit les réponses brutes.
 await fails("42501", "authenticated", INES, "select * from moods");
 await fails("42501", "authenticated", THOMAS, "select * from moods");
 await fails("42501", "anon", null, "select get_mirror()");
 
-// Saisie collaborateur.
-assert.equal((await as("authenticated", INES, "select has_submitted_today() v"))[0].v, false);
-await as("authenticated", INES, "select submit_mood(2, 4, array[1, 3, 3])");
-assert.equal((await as("authenticated", INES, "select has_submitted_today() v"))[0].v, true);
-await fails("23505", "authenticated", INES, "select submit_mood(4, 4, array[2])");
-await fails("22023", "authenticated", LEA, "select submit_mood(6, 3, array[1])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, 0, array[1])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, array[]::int[])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, array[1, 2, 3, 4])");
-await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, array[99])");
-await fails("42501", "authenticated", THOMAS, "select submit_mood(3, 3, array[1])");
+// Saisie collaborateur (comptes de démo : fenêtre jeudi-vendredi levée).
+assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.submitted, false);
+assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.open, true, "démo ouverte tous les jours");
+await as("authenticated", INES, Q());
+assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.submitted, true);
+await fails("23505", "authenticated", INES, Q()); // une seule réponse par semaine
+await fails("22023", "authenticated", LEA, Q(6));
+await fails("22023", "authenticated", LEA, Q(3, 0));
+await fails("22023", "authenticated", LEA, Q(3, 3, 3, "array[4,4,4,4,4,4,4,4]"));
+await fails("22023", "authenticated", LEA, Q(3, 3, 3, "array[4,4,4,4,4,4,4,4,0]"));
+await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 2));
+await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 0, "array[]::int[]"));
+await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 0, "array[1, 2, 3, 4]"));
+await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 0, "array[99]"));
+await fails("42501", "authenticated", THOMAS, Q());
 
 // Miroir : réservé au manager, pronostic d'abord, une seule fois par semaine.
 await fails("42501", "authenticated", INES, "select get_mirror()");
@@ -71,27 +81,27 @@ await fails("23505", "authenticated", THOMAS, "select submit_prediction(4)");
 const m = (await as("authenticated", THOMAS, "select get_mirror() m"))[0].m;
 assert.equal(m.needs_prediction, false);
 assert.equal(m.team_size, 8);
-assert.ok(m.days.length > 15 && m.days.every((d) => d.responses >= 5), "seuil de 5 réponses");
-assert.ok(!m.days.some((d) => "score" in d || "entry_key" in d));
+const closedWeeks = m.weeks.filter((w) => w.team_avg != null);
+assert.ok(closedWeeks.length >= 6 && closedWeeks.every((w) => w.responses >= 5), "semaines closes, seuil de 5 réponses");
+assert.ok(!JSON.stringify(m).includes("entry_key") && !JSON.stringify(m).includes("answers"), "aucune réponse brute");
 const old = m.weeks.find((w) => w.gap > 1.5);
 assert.equal(old?.dominant_tag, "Charge de travail", "angle mort détecté sur les premières semaines");
 assert.equal(m.weeks.at(-1).prediction, 3.5);
-assert.ok(m.recent.team_avg > 0 && typeof m.recent.dominant_tag === "string", "écart mesurable sur 7 jours, même un lundi");
-assert.ok(Math.abs(m.recent.team_avg - (m.matrix.impact + m.matrix.pleasure) / 2) < 0.02);
+assert.equal(m.weeks.at(-1).team_avg, null, "semaine en cours jamais publiée");
+assert.ok(m.current.responses >= 1, "seul le nombre de réponses de la semaine en cours est visible");
 
-// Matrice : agrégats des 7 derniers jours affichés, chaque réponse dans une seule zone.
-const z = m.matrix.zones;
-assert.equal(z.thriving + z.dreamer + z.danger + z.robot + z.middle, m.matrix.responses);
-assert.ok(m.matrix.impact >= 1 && m.matrix.impact <= 5 && m.matrix.pleasure >= 1 && m.matrix.pleasure <= 5);
-assert.ok(z.thriving > z.danger, "l'équipe est remontée vers l'épanouissement");
-
-// Trajectoire : un point par semaine affichée ; sujets par zone seulement au-delà de 5 réponses.
-assert.ok(m.weeks.filter((w) => w.team_avg != null).every((w) => w.impact >= 1 && w.pleasure >= 1));
-assert.ok(Object.keys(m.matrix.zone_tags).length > 0);
-for (const [zone, labels] of Object.entries(m.matrix.zone_tags)) {
-  assert.ok(m.matrix.zones[zone] >= 5, `zone ${zone} sous le seuil d'anonymat`);
-  assert.ok(labels.length >= 1 && labels.length <= 2);
-}
+// Dernière semaine close : point sur les 3 axes, 2 matrices, 6 facteurs, tendance, 2 sujets.
+const L = m.last;
+assert.equal(L.week_start, closedWeeks.at(-1).week_start);
+const sum = (o) => Object.values(o).reduce((a, b) => a + b, 0);
+assert.equal(sum(L.zones), L.responses);
+assert.equal(sum(L.energy_zones), L.responses);
+assert.deepEqual(Object.keys(L.factors).sort(), ["autonomie", "emotions", "intensite", "relations", "securite", "sens"]);
+assert.ok(Object.values(L.factors).every((v) => v >= 1 && v <= 5));
+assert.equal(L.trend.better + L.trend.same + L.trend.worse, L.responses);
+assert.ok(L.tags.length >= 1 && L.tags.length <= 2);
+assert.ok(Math.abs(L.team_avg - (L.impact + L.pleasure + L.energy) / 3) < 0.02, "moral = moyenne des 3 axes");
+assert.ok((L.zones.thriving ?? 0) > (L.zones.danger ?? 0), "l'équipe est remontée vers l'épanouissement");
 
 // Plan d'action : réservé au manager de l'équipe.
 const act = (await as("authenticated", THOMAS, "insert into actions (team_id, label) values ($1, 'Point charge') returning week_start, label", [TEAM]))[0];
@@ -102,17 +112,6 @@ await fails("23514", "authenticated", THOMAS, "insert into actions (team_id, lab
 await as("authenticated", THOMAS, "update actions set done_at = now()");
 assert.ok((await as("authenticated", THOMAS, "select done_at from actions"))[0].done_at);
 
-// Semaines = moyenne pondérée des seuls jours affichés (pas de fuite des jours sous le seuil).
-for (const w of m.weeks.filter((w) => w.team_avg != null)) {
-  const days = m.days.filter((d) => {
-    const dt = new Date(d.day), ws = new Date(w.week_start);
-    return dt >= ws && dt < new Date(ws.getTime() + 7 * 864e5);
-  });
-  const n = days.reduce((s, d) => s + d.responses, 0);
-  const avg = days.reduce((s, d) => s + d.team_avg * d.responses, 0) / n;
-  assert.ok(Math.abs(avg - w.team_avg) < 0.02, `semaine ${w.week_start}`);
-}
-
 // Back-office : réservé à l'admin, agrégats seulement.
 await fails("42501", "authenticated", THOMAS, "select admin_dashboard()");
 await fails("42501", "authenticated", INES, "select admin_create_user('x@y.fr', 'motdepasse', 'employee')");
@@ -121,18 +120,23 @@ assert.equal(dash.users.length, 26, "comptes de démo");
 assert.equal(dash.teams.length, 3);
 const produit = dash.teams.find((t) => t.id === TEAM);
 assert.equal(produit.size, 8);
-assert.ok(produit.avg > 0 && produit.participation > 0.5);
+assert.ok(produit.avg > 0 && produit.participation > 0.5 && produit.energy > 0);
+assert.equal(dash.stats.week_start, L.week_start, "dernière semaine close");
 const support = dash.teams.find((t) => t.name === "Support client");
 assert.ok(support.impact > 3.5 && support.pleasure < 2.6, "Support : zone Robot");
 assert.ok(dash.teams.find((t) => t.name === "Data & IA").pleasure > 3.5);
 assert.ok(dash.tags.some((t) => t.uses > 0));
 assert.ok(!JSON.stringify(dash).includes("entry_key") && !JSON.stringify(dash).includes("score"), "aucune réponse brute");
 assert.ok(produit.impact > 0 && produit.pleasure > 0);
-assert.ok(Object.values(dash.stats.zones).reduce((x, y) => x + y, 0) > 0);
+assert.ok(sum(dash.stats.zones) > 0 && sum(dash.stats.zones) === sum(dash.stats.energy_zones));
 
 // Comptes.
 const NEW = (await as("authenticated", ADMIN, "select admin_create_user(' Zoe@Moodly.test ', 'motdepasse', 'employee', $1) id", [TEAM]))[0].id;
 assert.equal((await as("authenticated", NEW, "select role, team_id from profiles"))[0].team_id, TEAM);
+// Hors démo, le questionnaire n'est ouvert que le jeudi et le vendredi.
+if (windowOpen) await as("authenticated", NEW, Q());
+else await fails("22023", "authenticated", NEW, Q());
+assert.equal((await as("authenticated", NEW, "select week_status() s"))[0].s.open, windowOpen);
 await fails("23505", "authenticated", ADMIN, "select admin_create_user('zoe@moodly.test', 'motdepasse', 'employee')");
 await fails("22023", "authenticated", ADMIN, "select admin_create_user('pas-un-mail', 'motdepasse', 'employee')");
 await fails("22023", "authenticated", ADMIN, "select admin_create_user('a@b.fr', 'court', 'employee')");
@@ -169,10 +173,11 @@ await as("authenticated", LEA, "select demo_reset()");
 const reset = (await as("authenticated", ADMIN, "select admin_dashboard() d"))[0].d;
 assert.equal(reset.users.length, 26, "comptes ajoutés pendant la démo supprimés, comptes supprimés recréés");
 assert.deepEqual(reset.teams.map((t) => t.size).sort(), [7, 7, 8]);
-assert.equal(reset.tags.length, 8);
+assert.equal(reset.tags.length, 9);
+assert.equal(reset.tags[8].label, "Autonomie");
 assert.equal(reset.tags[1].label, "Ambiance", "libellés d'origine");
-assert.equal((await as("authenticated", INES, "select has_submitted_today() v"))[0].v, false, "pas de réponse du jour");
+assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.submitted, false, "Inès répond elle-même");
 assert.deepEqual((await as("authenticated", THOMAS, "select get_mirror() m"))[0].m, { needs_prediction: true }, "pronostic à refaire");
 assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions"))[0].n, 3);
 
-console.log("OK", JSON.stringify({ ...m, days: `${m.days.length} jours` }, null, 1));
+console.log("OK", JSON.stringify(m, null, 1));

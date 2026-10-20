@@ -5,7 +5,7 @@ import { api, type Admin, type AdminTeam, type AdminUser } from "@/lib/api";
 import { downloadCsv } from "@/lib/csv";
 import { Icon } from "../icons";
 import { fmt } from "../miroir/chart";
-import { MatrixPlot, ZONES, type Zone } from "../matrix";
+import { AxisSwitch, ENERGY_ZONES, MatrixPlot, ZONES, type Axis } from "../matrix";
 
 export type Run = (fn: () => Promise<unknown>, ok: string, inline?: boolean) => Promise<string | null>;
 type Props = { data: Admin; run: Run };
@@ -71,17 +71,23 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
   const tags = [...data.tags].sort((a, b) => b.uses - a.uses);
   const max = Math.max(1, ...tags.map((t) => t.uses));
   const plotted = data.teams.filter((t) => t.impact != null && t.pleasure != null);
-  const zones = data.stats.zones ?? {};
+  const [axis, setAxis] = useState<Axis>("impact");
+  const zones: Record<string, number> = (axis === "impact" ? data.stats.zones : data.stats.energy_zones) ?? {};
   const total = Object.values(zones).reduce((a, b) => a + b, 0);
-  const share = (z: Zone) => Math.round(((zones[z] ?? 0) / total) * 100);
+  const share = (z: string) => Math.round(((zones[z] ?? 0) / total) * 100);
+  // Coins de la matrice : haut-gauche, haut-droite, bas-gauche, bas-droite.
+  const corners = axis === "impact"
+    ? { tl: ["dreamer", ZONES.dreamer], tr: ["thriving", ZONES.thriving], bl: ["danger", ZONES.danger], br: ["robot", ZONES.robot] }
+    : { tl: ["serenity", ENERGY_ZONES.serenity], tr: ["enthusiasm", ENERGY_ZONES.enthusiasm], bl: ["dejection", ENERGY_ZONES.dejection], br: ["tension", ENERGY_ZONES.tension] } as const;
+  const week = new Date(data.stats.week_start).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
 
-  // Résumé par équipe (tendance = moyenne de chaque semaine sur 30 jours), puis sujets.
+  // Résumé par équipe (dernière semaine close, tendance sur 8 semaines), puis sujets.
   function exportCsv() {
     downloadCsv(`moodly-rapport-${new Date().toISOString().slice(0, 10)}`, [
-      ["Équipe", "Manager", "Membres", "Participation 7 j (%)", "Moral 7 j", "Impact 7 j", "Plaisir 7 j", "Tendance 30 j"],
+      ["Équipe", "Manager", "Membres", `Participation sem. du ${data.stats.week_start} (%)`, "Moral", "Plaisir", "Énergie", "Impact", "Tendance 8 semaines"],
       ...data.teams.map((t) => [
         t.name, email.get(t.manager_id), t.size, t.participation == null ? null : Math.round(t.participation * 100),
-        t.avg, t.impact, t.pleasure, (t.trend ?? []).map((w) => fmt(w.avg)).join(" → "),
+        t.avg, t.pleasure, t.energy, t.impact, (t.trend ?? []).map((w) => fmt(w.avg)).join(" → "),
       ]),
       [],
       ["Sujet", "Citations 30 j"],
@@ -91,7 +97,7 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
 
   return (
     <>
-      <Header title="Vue d'ensemble" sub="7 derniers jours, aujourd'hui exclu. Moyennes sur les jours d'au moins 5 réponses, pour préserver l'anonymat.">
+      <Header title="Vue d'ensemble" sub={`Semaine du ${week}, la dernière close. Questionnaire du jeudi et du vendredi ; une équipe apparaît à partir de 5 réponses dans la semaine, pour préserver l'anonymat.`}>
         <div className="top-actions no-print">
           <button className="ghost" onClick={exportCsv}><Icon name="download" size={16} />Exporter CSV</button>
           <button className="ghost" onClick={() => print()}><Icon name="printer" size={16} />Rapport PDF</button>
@@ -132,7 +138,7 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
           ) : (
             <div className="table-wrap">
               <table className="data cards">
-                <thead><tr><th>Équipe</th><th>Membres</th><th>Participation</th><th>Moral 7 j</th><th>Tendance</th></tr></thead>
+                <thead><tr><th>Équipe</th><th>Membres</th><th>Participation</th><th>Moral</th><th>Tendance</th></tr></thead>
                 <tbody>
                   {data.teams.map((t) => (
                     <tr key={t.id}>
@@ -146,7 +152,7 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
                         <div className="meter" aria-hidden><div style={{ width: `${Math.min(100, (t.participation ?? 0) * 100)}%` }} /></div>
                         <span className="small">{pct(t.participation)}</span>
                       </td>
-                      <td data-label="Moral 7 j"><Mood avg={t.avg} /></td>
+                      <td data-label="Moral"><Mood avg={t.avg} /></td>
                       <td data-label="Tendance"><Spark trend={t.trend} /></td>
                     </tr>
                   ))}
@@ -160,18 +166,19 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
           <section className="panel">
             <div className="panel-head">
               <h2>Matrice de l&apos;entreprise</h2>
-              <span className="muted small">7 jours</span>
+              <AxisSwitch axis={axis} onChange={setAxis} />
             </div>
             {plotted.length === 0 ? (
-              <p className="muted">Pas encore assez de réponses : une équipe apparaît à partir de 5 réponses par jour.</p>
+              <p className="muted">Pas encore assez de réponses : une équipe apparaît à partir de 5 réponses dans une semaine close.</p>
             ) : (
               <>
                 <MatrixPlot
-                  marks={plotted.map((t) => ({ p: { impact: t.impact!, pleasure: t.pleasure! }, title: t.name, label: t.name, color: watch(t) ? "var(--rose-text)" : undefined }))}
+                  axis={axis}
+                  marks={plotted.map((t) => ({ p: { impact: t.impact!, pleasure: t.pleasure!, energy: t.energy ?? undefined }, title: t.name, label: t.name, color: watch(t) ? "var(--rose-text)" : undefined }))}
                   label={`Position des équipes : ${plotted.map((t) => `${t.name}, impact ${fmt(t.impact!)}, plaisir ${fmt(t.pleasure!)}`).join(" ; ")}.`}
-                  zones={total ? Object.fromEntries((["dreamer", "thriving", "danger", "robot"] as const).map((z) => [z, <><b>{share(z)} %</b>{ZONES[z].label}</>])) : undefined}
+                  zones={total ? Object.fromEntries(Object.entries(corners).map(([c, [k, z]]) => [c, <><b>{share(k)} %</b>{z.label}</>])) : undefined}
                 />
-                <p className="muted small">Chaque point est une équipe (en rouge : à surveiller). Pourcentages : toutes les réponses de l&apos;entreprise.</p>
+                <p className="muted small">Chaque point est une équipe (en rouge : à surveiller). Pourcentages : toutes les réponses de la semaine.</p>
               </>
             )}
           </section>
@@ -179,7 +186,7 @@ export function Overview({ data, onOpen }: { data: Admin; onOpen: (tab: string) 
           <section className="panel">
             <div className="panel-head">
               <h2>Sujets les plus cités</h2>
-              <span className="muted small">30 jours</span>
+              <span className="muted small">4 semaines</span>
             </div>
             <ol className="bars">
               {tags.map((t) => (
@@ -252,7 +259,7 @@ export function Teams({ data, run }: Props) {
               <dl className="team-stats">
                 <div><dt>Membres</dt><dd>{t.size}</dd></div>
                 <div><dt>Participation</dt><dd>{pct(t.participation)}</dd></div>
-                <div><dt>Moral 7 j</dt><dd><Mood avg={t.avg} /></dd></div>
+                <div><dt>Moral</dt><dd><Mood avg={t.avg} /></dd></div>
               </dl>
               <div className="row-actions">
                 <button className="ghost" onClick={() => open(t)}><Icon name="pencil" size={16} />Modifier</button>
@@ -466,7 +473,7 @@ export function Tags({ data, run }: Props) {
           <li key={t.id}>
             <form onSubmit={(e) => rename(e, t.id)}>
               <input name="label" defaultValue={t.label} key={t.label} required maxLength={40} aria-label={`Libellé du tag ${t.label}`} />
-              <span className="muted small">{t.uses} citation{t.uses > 1 ? "s" : ""} / 30 j</span>
+              <span className="muted small">{t.uses} citation{t.uses > 1 ? "s" : ""} / 4 sem.</span>
               <button className="icon-btn" aria-label={`Enregistrer le tag ${t.label}`} title="Enregistrer"><Icon name="check" size={18} /></button>
             </form>
           </li>

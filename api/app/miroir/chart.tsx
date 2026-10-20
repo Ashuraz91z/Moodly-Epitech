@@ -1,22 +1,21 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { Day, Week } from "@/lib/api";
+import type { Week } from "@/lib/api";
 
 export const TEAM = "#e11d48";
 export const FORECAST = "#7c3aed";
 const GRID = "#f1ebfb";
 const AXIS = "#475569";
-const DAYS = 30;
-const M = { top: 34, right: 12, bottom: 26, left: 26 };
-const MS = 864e5;
+const M = { top: 34, right: 12, bottom: 28, left: 26 };
 
-const utc = (d: string) => Date.parse(`${d}T00:00:00Z`);
 export const fmt = (n: number) => n.toLocaleString("fr-FR", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-const label = (t: number) => new Date(t).toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
+const label = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
 
-// Graphe du Miroir : moral réel (ligne), pronostic (paliers pointillés), zone d'écart, bulles « tag dominant ».
-export function MirrorChart({ days, weeks, today }: { days: Day[]; weeks: Week[]; today: string }) {
+// Graphe du Miroir, une colonne par semaine : moral de l'équipe (semaines closes), pronostic (paliers
+// pointillés), écart en surface, bulle « sujet dominant » sur les angles morts. La semaine en cours n'a
+// que le pronostic : ses résultats sont publiés lundi.
+export function MirrorChart({ weeks, thisWeek }: { weeks: Week[]; thisWeek: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [W, setW] = useState(600);
   const H = W > 700 ? 300 : 240;
@@ -28,74 +27,45 @@ export function MirrorChart({ days, weeks, today }: { days: Day[]; weeks: Week[]
     return () => ro.disconnect();
   }, []);
 
-  const start = utc(today) - (DAYS - 1) * MS;
-  const idx = (d: string) => Math.round((utc(d) - start) / MS);
-  const x = (i: number) => M.left + (i * (W - M.left - M.right)) / (DAYS - 1);
+  const N = Math.max(weeks.length, 1);
+  const slot = (W - M.left - M.right) / N;
+  const x = (i: number) => M.left + (i + 0.5) * slot;
   const y = (v: number) => M.top + ((5 - v) / 4) * (H - M.top - M.bottom);
+  const blind = (w: Week) => w.gap != null && Math.abs(w.gap) > 1.5;
 
-  const teamAt = new Map(days.map((d) => [idx(d.day), d]));
-  const predAt = (i: number) => {
-    const w = weeks.find((w) => w.prediction != null && i >= idx(w.week_start) && i < idx(w.week_start) + 7);
-    return w?.prediction ?? null;
-  };
-
-  const pts = days.map((d) => ({ i: idx(d.day), v: d.team_avg })).filter((p) => p.i >= 0);
-  const team = pts.map((p, k) => `${k ? "L" : "M"}${x(p.i)} ${y(p.v)}`).join("");
-
-  let forecast = "";
-  let lastEnd = -1;
-  for (const w of weeks) {
-    if (w.prediction == null) continue;
-    const s = Math.max(idx(w.week_start), 0);
-    const e = Math.min(idx(w.week_start) + 7, DAYS - 1);
-    if (s > DAYS - 1) continue;
-    forecast += s === lastEnd ? `V${y(w.prediction)}H${x(e)}` : `M${x(s)} ${y(w.prediction)}H${x(e)}`;
-    lastEnd = e;
-  }
-
-  // Zone d'écart : une surface par suite de jours ayant moral + pronostic.
-  const areas: string[] = [];
-  let run: { i: number; v: number; p: number }[] = [];
-  const flush = () => {
-    if (run.length > 1) {
-      const top = run.map((r) => `${x(r.i)} ${y(r.v)}`);
-      const bottom = [...run].reverse().map((r) => `${x(r.i)} ${y(r.p)}`);
-      areas.push(`M${[...top, ...bottom].join("L")}Z`);
-    }
-    run = [];
-  };
-  pts.forEach((p, k) => {
-    const pr = predAt(p.i);
-    if (pr == null || (k > 0 && run.length && pts[k - 1].i !== run[run.length - 1].i)) flush();
-    if (pr != null) run.push({ ...p, p: pr });
+  let team = "";
+  weeks.forEach((w, i) => {
+    if (w.team_avg == null) return;
+    team += `${i > 0 && weeks[i - 1].team_avg != null ? "L" : "M"}${x(i)} ${y(w.team_avg)}`;
   });
-  flush();
+  let forecast = "";
+  weeks.forEach((w, i) => {
+    if (w.prediction == null) return;
+    const s = x(i) - slot / 2, e = x(i) + slot / 2;
+    forecast += i > 0 && weeks[i - 1].prediction != null ? `V${y(w.prediction)}H${e}` : `M${s} ${y(w.prediction)}H${e}`;
+  });
 
-  // Bulles : semaines consécutives au même tag fusionnées, ancrées sur le point le plus bas.
+  // Bulles : semaines consécutives au même sujet fusionnées sur la plus basse.
   const notes: { i: number; v: number; tag: string }[] = [];
-  for (const w of weeks) {
-    if (!w.dominant_tag) continue;
-    const inWeek = pts.filter((p) => p.i >= idx(w.week_start) && p.i < idx(w.week_start) + 7);
-    if (!inWeek.length) continue;
-    const low = inWeek.reduce((a, b) => (b.v < a.v ? b : a));
-    const prev = notes[notes.length - 1];
-    if (prev && prev.tag === w.dominant_tag && low.i - prev.i <= 14) {
-      if (low.v < prev.v) Object.assign(prev, low);
-    } else notes.push({ ...low, tag: w.dominant_tag });
-  }
+  weeks.forEach((w, i) => {
+    if (!blind(w) || !w.dominant_tag || w.team_avg == null) return;
+    const prev = notes.at(-1);
+    if (prev && prev.tag === w.dominant_tag && i - prev.i <= 2) {
+      if (w.team_avg < prev.v) Object.assign(prev, { i, v: w.team_avg });
+    } else notes.push({ i, v: w.team_avg, tag: w.dominant_tag });
+  });
 
   function move(e: React.PointerEvent<SVGRectElement>) {
     const r = e.currentTarget.getBoundingClientRect();
-    const i = Math.round(((e.clientX - r.left) / r.width) * (DAYS - 1));
-    setHover(Math.max(0, Math.min(DAYS - 1, i)));
+    setHover(Math.max(0, Math.min(N - 1, Math.floor(((e.clientX - r.left) / r.width) * N))));
   }
   function key(e: React.KeyboardEvent) {
     if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
     e.preventDefault();
-    setHover((h) => Math.max(0, Math.min(DAYS - 1, (h ?? DAYS - 1) + (e.key === "ArrowLeft" ? -1 : 1))));
+    setHover((h) => Math.max(0, Math.min(N - 1, (h ?? N - 1) + (e.key === "ArrowLeft" ? -1 : 1))));
   }
-
-  const h = hover == null ? null : { day: teamAt.get(hover), pred: predAt(hover) };
+  const h = hover == null ? null : weeks[hover];
+  const every = N > 9 ? 2 : 1;
 
   return (
     <div className="chart" ref={box}>
@@ -103,10 +73,10 @@ export function MirrorChart({ days, weeks, today }: { days: Day[]; weeks: Week[]
         width={W}
         height={H}
         role="img"
-        aria-label="Moral de l'équipe et ton pronostic sur 30 jours. Flèches gauche et droite pour parcourir les jours."
+        aria-label={`Moral de l'équipe et ton pronostic, semaine par semaine sur ${N} semaines. Flèches gauche et droite pour parcourir les semaines.`}
         tabIndex={0}
         onKeyDown={key}
-        onFocus={() => setHover((h) => h ?? DAYS - 1)}
+        onFocus={() => setHover((v) => v ?? N - 1)}
         onBlur={() => setHover(null)}
       >
         {[1, 2, 3, 4, 5].map((v) => (
@@ -115,45 +85,52 @@ export function MirrorChart({ days, weeks, today }: { days: Day[]; weeks: Week[]
             <text x={M.left - 10} y={y(v) + 4} textAnchor="end" fontSize="12" fill={AXIS}>{v}</text>
           </g>
         ))}
-        {[1, 8, 15, 22, 29].map((i) => (
-          <text key={i} x={x(i)} y={H - 6} textAnchor={i === 29 ? "end" : "middle"} fontSize="12" fill={AXIS}>
-            {label(start + i * MS)}
+        {weeks.map((w, i) => (i % every === (N - 1) % every || w.week_start === thisWeek) && (
+          <text key={w.week_start} x={x(i)} y={H - 8} textAnchor="middle" fontSize="12" fill={AXIS} fontWeight={w.week_start === thisWeek ? 700 : 400}>
+            {w.week_start === thisWeek ? "en cours" : label(w.week_start)}
           </text>
         ))}
-        {areas.map((d, k) => <path key={k} d={d} fill={TEAM} fillOpacity="0.12" className="appear" />)}
+        {weeks.map((w, i) => w.team_avg != null && w.prediction != null && (
+          <rect key={`gap${i}`} className="appear" x={x(i) - slot * 0.22} width={slot * 0.44}
+            y={Math.min(y(w.team_avg), y(w.prediction))} height={Math.abs(y(w.team_avg) - y(w.prediction))}
+            rx={4} fill={TEAM} fillOpacity={blind(w) ? 0.22 : 0.1} />
+        ))}
         <path d={forecast} fill="none" stroke={FORECAST} strokeWidth="2" strokeDasharray="6 5" />
-        <path d={team} fill="none" stroke={TEAM} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="draw" />
+        <path d={team} fill="none" stroke={TEAM} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" pathLength={1} className="draw" />
+        {weeks.map((w, i) => w.team_avg != null && (
+          <circle key={`p${i}`} cx={x(i)} cy={y(w.team_avg)} r={blind(w) ? 5.5 : 4} fill={TEAM} stroke="#fff" strokeWidth="2" />
+        ))}
         {notes.map((n) => {
           const w = n.tag.length * 6.6 + 16;
           const bx = Math.min(Math.max(x(n.i) - w / 2, M.left), W - M.right - w);
           return (
             <g key={n.i} className="pop">
               <line x1={x(n.i)} x2={x(n.i)} y1={26} y2={y(n.v) - 9} stroke={TEAM} strokeOpacity="0.35" strokeDasharray="2 3" />
-              <circle cx={x(n.i)} cy={y(n.v)} r="9" fill="none" stroke={TEAM} strokeOpacity="0.35" />
-              <circle cx={x(n.i)} cy={y(n.v)} r="4.5" fill={TEAM} stroke="#fff" strokeWidth="2" />
               <rect x={bx} y={4} width={w} height={22} rx={11} fill="#fff1f2" stroke={TEAM} strokeOpacity="0.4" />
               <text x={bx + w / 2} y={19} textAnchor="middle" fontSize="12" fontWeight="600" fill="#0f172a">{n.tag}</text>
             </g>
           );
         })}
         {hover != null && (
-          <g pointerEvents="none">
-            <line x1={x(hover)} x2={x(hover)} y1={M.top} y2={H - M.bottom} stroke="#968cb0" />
-            {h?.day && <circle cx={x(hover)} cy={y(h.day.team_avg)} r="5" fill={TEAM} stroke="#fff" strokeWidth="2" />}
-            {h?.pred != null && <circle cx={x(hover)} cy={y(h.pred)} r="5" fill={FORECAST} stroke="#fff" strokeWidth="2" />}
-          </g>
+          <rect x={x(hover) - slot / 2} y={M.top} width={slot} height={H - M.top - M.bottom} fill="#7c3aed" fillOpacity="0.06" pointerEvents="none" />
         )}
         <rect
           x={M.left} y={M.top} width={W - M.left - M.right} height={H - M.top - M.bottom} fill="transparent"
           onPointerMove={move} onPointerLeave={() => setHover(null)}
         />
       </svg>
-      {hover != null && (
-        <div className="tooltip" style={{ left: x(hover) > W - 180 ? x(hover) - 172 : x(hover) + 12, top: M.top }} aria-live="polite">
-          <span>{label(start + hover * MS)}</span>
-          <div><svg width="14" height="2"><line x2="14" stroke={TEAM} strokeWidth="4" /></svg><b>{h?.day ? fmt(h.day.team_avg) : "—"}</b> Équipe{h?.day ? ` · ${h.day.responses} rép.` : ""}</div>
-          {!h?.day && <span>moins de 5 réponses</span>}
-          <div><svg width="14" height="2"><line x2="14" stroke={FORECAST} strokeWidth="4" strokeDasharray="4 2" /></svg><b>{h?.pred != null ? fmt(h.pred) : "—"}</b> Mon pronostic</div>
+      {h && hover != null && (
+        <div className="tooltip" style={{ left: x(hover) > W - 190 ? x(hover) - 182 : x(hover) + 12, top: M.top }} aria-live="polite">
+          <span>Semaine du {label(h.week_start)}</span>
+          <div>
+            <svg width="14" height="2"><line x2="14" stroke={TEAM} strokeWidth="4" /></svg>
+            <b>{h.team_avg != null ? fmt(h.team_avg) : "—"}</b> Équipe{h.responses ? ` · ${h.responses} rép.` : ""}
+          </div>
+          {h.team_avg == null && <span>{h.week_start === thisWeek ? "résultats lundi" : "moins de 5 réponses"}</span>}
+          <div>
+            <svg width="14" height="2"><line x2="14" stroke={FORECAST} strokeWidth="4" strokeDasharray="4 2" /></svg>
+            <b>{h.prediction != null ? fmt(h.prediction) : "—"}</b> Mon pronostic
+          </div>
         </div>
       )}
     </div>

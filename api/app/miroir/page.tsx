@@ -7,6 +7,7 @@ import { Logout } from "../logout";
 import { Icon, Loader, type IconName } from "../icons";
 import { TeamMatrix } from "../matrix";
 import { ActionPlan } from "./plan";
+import { FACTORS } from "../questionnaire";
 import { downloadCsv } from "@/lib/csv";
 import { FORECAST, MirrorChart, TEAM, fmt, todayInParis } from "./chart";
 
@@ -19,6 +20,7 @@ const ACTIONS: Record<string, string[]> = {
   "Sens du travail": ["Rappeler l'impact du travail de l'équipe", "Associer l'équipe aux décisions", "Partager les retours clients"],
   "Conditions matérielles": ["Lister les irritants matériels avec l'équipe", "Remonter les besoins prioritaires", "Suivre les demandes en cours"],
   Personnel: ["Rester disponible sans insister", "Rappeler les ressources d'aide (médecine du travail)", "Alléger temporairement si besoin"],
+  Autonomie: ["Laisser l'équipe choisir comment s'organiser", "Réduire les validations superflues", "Déléguer une décision à l'équipe"],
 };
 const WEATHER: { min: number; icon: IconName; color: string; label: string }[] = [
   { min: 4.2, icon: "sun", color: "#d97706", label: "Grand soleil" },
@@ -51,7 +53,7 @@ function Forecast({ onDone }: { onDone: () => void }) {
     <main className="screen">
       <p className="eyebrow">Espace manager</p>
       <h1>Avant de voir les résultats…</h1>
-      <p className="sub">Selon toi, quel est le moral de ton équipe cette semaine ?</p>
+      <p className="sub">Selon toi, quel est le moral de ton équipe cette semaine ? Tu le compareras lundi, quand la semaine sera close.</p>
       <div>
         <div className="forecast">
           <output htmlFor="forecast">{fmt(score)} <small>/ 5</small></output>
@@ -61,11 +63,58 @@ function Forecast({ onDone }: { onDone: () => void }) {
       </div>
       <div className="card">
         <strong>Pourquoi ce pronostic ?</strong>
-        <p>Le Miroir compare ta perception au ressenti réel de l&apos;équipe : la moyenne de son plaisir et de son impact sur la matrice. Un seul pronostic par semaine : il ne pourra plus être modifié.</p>
+        <p>Chaque semaine, le Miroir compare ton pronostic au moral réel de l&apos;équipe : la moyenne de son plaisir, de son énergie et de son impact, d&apos;après le questionnaire du jeudi et du vendredi. Un seul pronostic par semaine, non modifiable.</p>
       </div>
       {error && <p className="error" role="alert">{error}</p>}
       <button className="btn dark" disabled={busy} onClick={send}>{busy ? "Révélation…" : "Révéler le Miroir"}</button>
     </main>
+  );
+}
+
+const tone = (v: number) => (v < 2.6 ? "low" : v < 3.4 ? "mid" : "good");
+
+// Les 6 facteurs de risques psychosociaux, la tendance déclarée et les sujets (dernière semaine close).
+function Factors({ last }: { last: NonNullable<Extract<Mirror, { needs_prediction: false }>["last"]> }) {
+  const t = last.trend;
+  const total = t ? t.better + t.same + t.worse : 0;
+  return (
+    <section className="factors-block">
+      <h2>Ce qui pèse et ce qui porte <small>semaine du {shortDate(last.week_start)}</small></h2>
+      <div className="factors-grid">
+        {last.factors ? (
+          <ol className="bars factors">
+            {[...FACTORS].sort((a, b) => last.factors![a.key] - last.factors![b.key]).map((f) => (
+              <li key={f.key}>
+                <span>{f.label}</span>
+                <div className="meter" aria-hidden><div className={tone(last.factors![f.key])} style={{ width: `${(last.factors![f.key] / 5) * 100}%` }} /></div>
+                <span className="small">{fmt(last.factors![f.key])}</span>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="note">Facteurs affichés à partir de 5 questionnaires complets.</p>
+        )}
+        <div className="factors-side">
+          {t && (
+            <div>
+              <h3>Par rapport à la semaine d&apos;avant</h3>
+              <div className="trend-bar" role="img" aria-label={`${t.better} meilleure, ${t.same} pareille, ${t.worse} moins bonne`}>
+                {t.better > 0 && <span className="good" style={{ flex: t.better }}>{Math.round((t.better / total) * 100)} % mieux</span>}
+                {t.same > 0 && <span className="same" style={{ flex: t.same }}>{Math.round((t.same / total) * 100)} % pareille</span>}
+                {t.worse > 0 && <span className="low" style={{ flex: t.worse }}>{Math.round((t.worse / total) * 100)} % moins bien</span>}
+              </div>
+            </div>
+          )}
+          {last.tags.length > 0 && (
+            <div>
+              <h3>Sujets les plus cités</h3>
+              <div className="chips">{last.tags.map((tag) => <span key={tag} className="pill">{tag}</span>)}</div>
+            </div>
+          )}
+          <p className="muted small">Notes de 1 à 5, 5 = favorable. Moyennes d&apos;équipe uniquement, à partir de 5 réponses.</p>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -75,7 +124,7 @@ export default function Miroir() {
   const [error, setError] = useState("");
 
   const load = useCallback(() => {
-    api<Mirror>("/api/mirror?days=30")
+    api<Mirror>("/api/mirror?weeks=8")
       .then(setMirror)
       .catch((e) => (e instanceof ApiError && e.status === 403 ? router.replace("/") : setError(e.message)));
   }, [router]);
@@ -85,32 +134,31 @@ export default function Miroir() {
   if (mirror.needs_prediction) return <Forecast onDone={load} />;
 
   const today = todayInParis();
-  // Pronostic de la semaine face au ressenti des 7 derniers jours (disponible même un lundi).
-  const week = mirror.weeks.at(-1);
-  const prediction = week?.prediction ?? null;
-  const teamAvg = mirror.recent?.team_avg ?? null;
-  const gap = prediction != null && teamAvg != null ? Math.round((prediction - teamAvg) * 100) / 100 : null;
+  // Révélation sur la dernière semaine close : le pronostic d'alors face au moral réel.
+  const last = mirror.last;
+  const row = last ? mirror.weeks.find((w) => w.week_start === last.week_start) : undefined;
+  const prediction = row?.prediction ?? null;
+  const teamAvg = last?.team_avg ?? null;
+  const gap = row?.gap ?? null;
   const blind = gap != null && Math.abs(gap) > 1.5;
-  const dominant = mirror.recent?.dominant_tag ?? null;
+  const dominant = row?.dominant_tag ?? null;
   const first = mirror.weeks.find((w) => w.gap != null);
-  const participation = mirror.team_size ? Math.round((mirror.avg_daily_responses / mirror.team_size) * 100) : 0;
+  const participation = last && mirror.team_size ? Math.round((last.responses / mirror.team_size) * 100) : null;
   const actions = gap != null && gap < 0 ? UNDERESTIMATE : ACTIONS[dominant ?? ""] ?? [];
 
   function exportCsv() {
     if (mirror?.needs_prediction !== false) return;
     downloadCsv(`moodly-miroir-${today}`, [
-      ["Semaine du", "Pronostic", "Moral équipe", "Impact", "Plaisir", "Écart", "Tag dominant"],
-      ...mirror.weeks.map((w) => [w.week_start, w.prediction, w.team_avg, w.impact, w.pleasure, w.gap, w.dominant_tag]),
-      [],
-      ["Jour", "Moral équipe", "Réponses"],
-      ...mirror.days.map((d) => [d.day, d.team_avg, d.responses]),
+      ["Semaine du", "Pronostic", "Moral équipe", "Plaisir", "Énergie", "Impact", "Réponses", "Écart", "Sujet dominant"],
+      ...mirror.weeks.map((w) => [w.week_start, w.prediction, w.team_avg, w.pleasure, w.energy, w.impact, w.responses, w.gap, w.dominant_tag]),
+      ...(last?.factors ? [[], [`Facteurs, semaine du ${last.week_start}`, "Note / 5"], ...FACTORS.map((f) => [f.label, last.factors![f.key]])] : []),
     ]);
   }
 
   return (
     <main className="screen wide">
       <div className="top">
-        <p className="eyebrow">Le Miroir · 30 jours</p>
+        <p className="eyebrow">Le Miroir · 8 semaines</p>
         <div className="top-actions no-print">
           <button className="ghost" onClick={exportCsv}><Icon name="download" size={16} />CSV</button>
           <button className="ghost" onClick={() => print()}><Icon name="printer" size={16} />PDF</button>
@@ -118,26 +166,37 @@ export default function Miroir() {
         </div>
       </div>
 
-      {teamAvg != null && prediction != null && (
+      {last && teamAvg != null ? (
         <div className="weather">
           <span className="icon" style={{ color: weatherOf(teamAvg).color }}><Icon name={weatherOf(teamAvg).icon} size={36} /></span>
           <div>
             <strong>Météo de l&apos;équipe : {weatherOf(teamAvg).label}</strong>
-            <p>Tu pensais <strong style={{ color: FORECAST }}>{fmt(prediction)}</strong> · l&apos;équipe est à <strong style={{ color: TEAM }}>{fmt(teamAvg)}</strong> / 5 ces 7 derniers jours</p>
+            <p>
+              Semaine du {shortDate(last.week_start)} :{" "}
+              {prediction != null && <>tu pensais <strong style={{ color: FORECAST }}>{fmt(prediction)}</strong> · </>}
+              l&apos;équipe était à <strong style={{ color: TEAM }}>{fmt(teamAvg)}</strong> / 5
+            </p>
           </div>
         </div>
+      ) : (
+        <p className="note">Aucune semaine close avec au moins 5 réponses pour l&apos;instant : les résultats apparaîtront le lundi qui suit.</p>
       )}
 
-      <div className="tiles">
+      <div className="tiles three">
         <div className={`tile${blind ? " alert" : ""}`}>
-          <span>Écart · 7 jours{blind ? " · angle mort" : ""}</span>
+          <span>Écart · semaine dernière{blind ? " · angle mort" : ""}</span>
           <strong>{gap == null ? "—" : `${fmt(Math.abs(gap))} pt`}</strong>
-          <span>{gap == null ? "Pas encore assez de réponses" : gap > 0 ? "Tu surestimes" : gap < 0 ? "Tu sous-estimes" : "Lecture juste"}</span>
+          <span>{gap == null ? "Pas de pronostic ou pas assez de réponses" : gap > 0 ? "Tu surestimais" : gap < 0 ? "Tu sous-estimais" : "Lecture juste"}</span>
         </div>
         <div className="tile">
           <span>Participation</span>
-          <strong>{participation} %</strong>
-          <span>sur les 7 derniers jours</span>
+          <strong>{participation == null ? "—" : `${participation} %`}</strong>
+          <span>semaine dernière</span>
+        </div>
+        <div className="tile zone">
+          <span>Cette semaine · questionnaire jeudi et vendredi</span>
+          <strong className="zone-name">{mirror.current.responses} réponse{mirror.current.responses > 1 ? "s" : ""} sur {mirror.team_size}</strong>
+          <span>Résultats lundi, une fois la semaine close, s&apos;il y a au moins 5 réponses.</span>
         </div>
       </div>
 
@@ -146,8 +205,8 @@ export default function Miroir() {
           <span><svg width="22" height="4"><line x2="22" y1="2" y2="2" stroke={TEAM} strokeWidth="3" /></svg>Équipe</span>
           <span><svg width="22" height="4"><line x2="22" y1="2" y2="2" stroke={FORECAST} strokeWidth="3" strokeDasharray="6 4" /></svg>Mon pronostic</span>
         </div>
-        <MirrorChart days={mirror.days} weeks={mirror.weeks} today={today} />
-        {first && first !== week && first.gap != null && gap != null && (
+        <MirrorChart weeks={mirror.weeks} thisWeek={mirror.current.week_start} />
+        {first && first.week_start !== row?.week_start && first.gap != null && gap != null && (
           <span className={`trend ${Math.abs(gap) <= Math.abs(first.gap) ? "down" : "up"}`}>
             <Icon name={Math.abs(gap) <= Math.abs(first.gap) ? "down" : "up"} size={16} />
             {Math.abs(gap) <= Math.abs(first.gap) ? "Écart réduit" : "Écart en hausse"} : {fmt(Math.abs(first.gap))} → {fmt(Math.abs(gap))} pt depuis le {shortDate(first.week_start)}
@@ -156,12 +215,8 @@ export default function Miroir() {
       </div>
 
       <section className="matrix-block">
-        <h2>Matrice de l&apos;équipe <small>trajectoire sur 30 jours</small></h2>
-        {mirror.matrix ? (
-          <TeamMatrix data={mirror.matrix} weeks={mirror.weeks} />
-        ) : (
-          <p className="note">Pas encore assez de réponses : la matrice s&apos;affiche à partir de 5 réponses par jour.</p>
-        )}
+        <h2>Matrice de l&apos;équipe <small>trajectoire sur 8 semaines</small></h2>
+        {last ? <TeamMatrix data={last} weeks={mirror.weeks} /> : <p className="note">La matrice s&apos;affiche à partir de 5 réponses dans une semaine close.</p>}
       </section>
 
       <div className="miroir-side">
@@ -171,36 +226,31 @@ export default function Miroir() {
             <div>
               <h2>Angle mort détecté</h2>
               <p>
-                Ton équipe va {gap! > 0 ? "moins bien" : "mieux"} que tu ne le penses.
+                La semaine dernière, ton équipe allait {gap! > 0 ? "moins bien" : "mieux"} que tu ne le pensais.
                 {gap! > 0 && dominant && <> Sujet dominant : <strong>{dominant}</strong></>}
               </p>
             </div>
           </div>
         ) : gap != null ? (
-          <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception est proche du ressenti de l&apos;équipe cette semaine.</div>
+          <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception était proche du ressenti de l&apos;équipe la semaine dernière.</div>
         ) : null}
 
         <ActionPlan suggestions={blind ? actions : []} weeks={mirror.weeks} today={today} />
       </div>
 
+      {last && <Factors last={last} />}
+
       <details>
         <summary>Voir les données du graphe</summary>
         <table>
-          <thead><tr><th>Jour</th><th>Équipe</th><th>Réponses</th></tr></thead>
-          <tbody>
-            {mirror.days.map((d) => (
-              <tr key={d.day}><td>{d.day}</td><td>{fmt(d.team_avg)}</td><td>{d.responses}</td></tr>
-            ))}
-          </tbody>
-        </table>
-        <table>
-          <thead><tr><th>Semaine du</th><th>Pronostic</th><th>Équipe</th><th>Écart</th><th>Tag</th></tr></thead>
+          <thead><tr><th>Semaine du</th><th>Pronostic</th><th>Équipe</th><th>Réponses</th><th>Écart</th><th>Sujet dominant</th></tr></thead>
           <tbody>
             {mirror.weeks.map((w) => (
               <tr key={w.week_start}>
                 <td>{w.week_start}</td>
                 <td>{w.prediction == null ? "—" : fmt(w.prediction)}</td>
                 <td>{w.team_avg == null ? "—" : fmt(w.team_avg)}</td>
+                <td>{w.responses ?? "—"}</td>
                 <td>{w.gap == null ? "—" : fmt(w.gap)}</td>
                 <td>{w.dominant_tag ?? ""}</td>
               </tr>

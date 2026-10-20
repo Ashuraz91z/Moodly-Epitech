@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
-import { seedDemoHistory } from "./history";
+import { DEMO_EMPLOYEE, readHistory, seedDemoHistory } from "./history";
 import { Icon } from "./icons";
 import { todayInParis } from "./miroir/chart";
 
@@ -11,17 +11,17 @@ const STEPS = [
   {
     as: "employee", label: "Collaborateur", paths: ["/saisie", "/parcours"],
     who: "Tu es Inès, collaboratrice de l'Équipe Produit.",
-    todo: "Place ton point sur la matrice, choisis 1 à 3 sujets et envoie. Ta réponse est anonyme : elle rejoint les moyennes de l'équipe dès demain, jamais seule.",
+    todo: "Réponds au questionnaire de la semaine (2 min), place-toi toi-même sur la matrice, puis découvre où tes réponses te situent vraiment. Tout reste anonyme : l'équipe n'en voit qu'une moyenne, lundi.",
   },
   {
     as: "manager", label: "Manager", paths: ["/miroir"],
     who: "Tu es Thomas, manager de l'Équipe Produit.",
-    todo: "Fais ton pronostic : le Miroir le compare au ressenti des 7 derniers jours. Fais défiler : il y a 3 semaines, Thomas avait un angle mort de près de 2 points sur la charge de travail, puis il a agi.",
+    todo: "Fais ton pronostic de la semaine, puis lis le Miroir : semaine après semaine, il y a un mois Thomas avait un angle mort de près de 2 points sur la charge de travail ; il a agi et l'équipe est remontée.",
   },
   {
     as: "admin", label: "RH", paths: ["/admin"],
     who: "Tu es l'admin RH de l'entreprise.",
-    todo: "Toutes les équipes sur la matrice : Support client est efficace mais épuisé (zone Robot) alors que son manager le croit en forme. Comptes, tags et exports dans les onglets.",
+    todo: "Toutes les équipes sur la matrice (impact ou énergie) : Support client est efficace mais épuisé alors que son manager le croit en forme. Comptes, sujets et exports dans les onglets.",
   },
 ];
 
@@ -40,6 +40,11 @@ export function DemoBanner() {
   const on = useSyncExternalStore(() => () => {}, inDemo, () => false);
   const [busy, setBusy] = useState(false);
   const i = STEPS.findIndex((s) => s.paths.includes(path));
+
+  // Démo ouverte sur un autre appareil ou une autre adresse du site : historique d'Inès absent ici.
+  useEffect(() => {
+    if (on && i === 0 && Object.keys(readHistory(DEMO_EMPLOYEE)).length < 5) seedDemoHistory(todayInParis(), true);
+  }, [on, i]);
   if (!on || i < 0) return null;
 
   const step = STEPS[i];

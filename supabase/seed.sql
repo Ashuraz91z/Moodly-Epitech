@@ -7,5 +7,6 @@
 --   lina@moodly.test (manager)             Data & IA : plaisir sans impact (zone Rêveur), Lina sous-estime
 --
 -- Rejouable : remet toute la démo à zéro, calée sur aujourd'hui (comme « Lancer la démo »).
--- Les réponses du jour et le pronostic de la semaine ne sont pas créés : le parcours de démo les fait.
+-- 8 semaines closes de questionnaires ; la réponse d'Inès et le pronostic de la semaine en cours
+-- ne sont pas créés : le parcours de démo les fait.
 select private.demo_reset();
