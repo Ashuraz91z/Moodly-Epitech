@@ -1,9 +1,10 @@
 import { badRequest, handle } from "@/lib/supabase";
 
+// Questionnaire de la semaine : point perçu (plaisir, énergie, impact), Q3 à Q11, tendance Q12, sujets Q13.
 export async function POST(req: Request) {
-  const { impact, pleasure, score, tagIds } = await req.json().catch(() => ({}));
-  // Ancien format { score } (app iOS pas encore à jour) : reporté sur les deux axes.
-  const [i, p] = typeof impact === "number" ? [impact, pleasure] : [score, score];
-  if (typeof i !== "number" || typeof p !== "number" || !Array.isArray(tagIds)) return badRequest("Attendu : { impact, pleasure, tagIds }");
-  return handle(req, (sb) => sb.rpc("submit_mood", { impact: i, pleasure: p, tag_ids: tagIds }));
+  const { pleasure, energy, impact, answers, trend, tagIds } = await req.json().catch(() => ({}));
+  if (![pleasure, energy, impact, trend].every((n) => typeof n === "number") || !Array.isArray(answers) || !Array.isArray(tagIds)) {
+    return badRequest("Attendu : { pleasure, energy, impact, answers: [9 notes], trend, tagIds }");
+  }
+  return handle(req, (sb) => sb.rpc("submit_mood", { pleasure, energy, impact, answers, trend, tag_ids: tagIds }));
 }

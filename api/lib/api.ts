@@ -1,4 +1,5 @@
-import type { TeamMatrixData, Zone } from "@/app/matrix";
+import type { EnergyZone, Zone } from "@/app/matrix";
+import type { FactorKey } from "@/app/questionnaire";
 
 // Appels à l'API depuis la version web (cookies httpOnly envoyés automatiquement).
 export class ApiError extends Error {
@@ -23,16 +24,22 @@ export async function api<T>(path: string, body?: unknown, method = "POST"): Pro
 export type Role = "employee" | "manager" | "admin";
 export type Me = { id: string; role: Role; team: { id: string; name: string } | null };
 export type Tag = { id: number; label: string };
-export type Day = { day: string; team_avg: number; responses: number };
-export type Week = { week_start: string; prediction: number | null; team_avg: number | null; impact: number | null; pleasure: number | null; gap: number | null; dominant_tag: string | null };
+export type Week = { week_start: string; prediction: number | null; team_avg: number | null; impact: number | null; pleasure: number | null; energy: number | null; responses: number | null; gap: number | null; dominant_tag: string | null };
 export type Mirror =
   | { needs_prediction: true }
-  | { needs_prediction: false; team_size: number; avg_daily_responses: number; matrix: TeamMatrixData | null; recent: { team_avg: number; dominant_tag: string | null } | null; days: Day[]; weeks: Week[] };
+  | { needs_prediction: false; team_size: number; current: { week_start: string; responses: number }; last: LastWeek | null; weeks: Week[] };
 
-export type AdminTeam = { id: string; name: string; manager_id: string; size: number; participation: number | null; avg: number | null; impact: number | null; pleasure: number | null; trend: { week_start: string; avg: number }[] | null };
+// Dernière semaine close de l'équipe (au moins 5 réponses) : point, 2 matrices, facteurs, tendance, sujets.
+export type LastWeek = {
+  week_start: string; responses: number; team_avg: number; impact: number; pleasure: number; energy: number;
+  zones: Partial<Record<Zone, number>>; energy_zones: Partial<Record<EnergyZone, number>>; tags: string[];
+  factors: Record<FactorKey, number> | null; trend: { better: number; same: number; worse: number } | null;
+};
+
+export type AdminTeam = { id: string; name: string; manager_id: string; size: number; participation: number | null; avg: number | null; impact: number | null; pleasure: number | null; energy: number | null; trend: { week_start: string; avg: number }[] | null };
 export type AdminUser = { id: string; email: string; role: Role; team_id: string | null; created_at: string; last_sign_in_at: string | null };
 export type Admin = {
-  stats: { avg: number | null; participation: number | null; zones: Partial<Record<Zone, number>> | null };
+  stats: { week_start: string; avg: number | null; participation: number | null; zones: Partial<Record<Zone, number>> | null; energy_zones: Partial<Record<EnergyZone, number>> | null };
   teams: AdminTeam[];
   users: AdminUser[];
   tags: (Tag & { uses: number })[];

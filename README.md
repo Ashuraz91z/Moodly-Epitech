@@ -9,7 +9,7 @@ api/        Next.js : l'API (app/api) et la version web (login, saisie, miroir, 
 
 ## Mise en place
 
-1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql` à `006_miroir_recent.sql`), puis `supabase/seed.sql` (démo).
+1. **Base** : dans Supabase → SQL Editor, exécuter les fichiers de `supabase/migrations/` dans l'ordre (`001_init.sql` à `007_weekly_questionnaire.sql`), puis `supabase/seed.sql` (démo).
    Base déjà en place : exécuter seulement les migrations manquantes. Après `002_admin.sql`, nommer un premier admin :
    ```sql
    update profiles set role = 'admin', team_id = null
@@ -26,7 +26,7 @@ Comptes de démo (mot de passe `moodly-demo`) : voir l'en-tête de `supabase/see
 
 ## Démo
 
-Sur la page de connexion, **Lancer la démo guidée** remet toute la démo à zéro (calée sur aujourd'hui) puis enchaîne 3 étapes avec un bandeau de guidage : Inès (collaboratrice) répond sur la matrice, Thomas (manager) fait son pronostic et découvre le Miroir, puis le back-office RH. Les boutons Collaborateur / Manager / Admin entrent directement dans un rôle, eux aussi après remise à zéro.
+Sur la page de connexion, **Lancer la démo guidée** remet toute la démo à zéro (calée sur aujourd'hui) puis enchaîne 3 étapes avec un bandeau de guidage : Inès (collaboratrice) remplit le questionnaire, se place sur la matrice et découvre où ses réponses la situent, Thomas (manager) fait son pronostic et découvre le Miroir, puis le back-office RH. Les boutons Collaborateur / Manager / Admin entrent directement dans un rôle, eux aussi après remise à zéro.
 
 - La remise à zéro (`private.demo_reset()`, migration 005) **efface tout ce qui n'est pas la démo** : à réserver à une base dédiée.
 - `seed.sql` fait la même remise à zéro, rejouable à volonté.
@@ -54,10 +54,10 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 | POST | `/api/auth/logout` | tous | | 204, révoque la session (et efface les cookies web) |
 | GET | `/api/me` | tous | | `{ id, role: "employee" \| "manager" \| "admin", team: { id, name } \| null }` |
 | GET | `/api/tags` | tous | | `[{ id, label }]` |
-| GET | `/api/moods/today` | collaborateur | | `{ submitted: bool }` |
-| POST | `/api/moods` | collaborateur | `{ impact: 1-5, pleasure: 1-5, tagIds: [1 à 3 ids] }` (ancien format `{ score }` encore accepté) | 204 |
+| GET | `/api/moods/week` | collaborateur | | `{ submitted, open, opens_on }` (fenêtre jeudi-vendredi) |
+| POST | `/api/moods` | collaborateur | `{ pleasure, energy, impact: 1-5, answers: [9 notes 1-5], trend: -1/0/1, tagIds: [1 à 3 ids] }` | 204, une fois par semaine |
 | POST | `/api/predictions` | manager | `{ score: 1-5 }` (ex. 3.5) | 204 |
-| GET | `/api/mirror?days=30` | manager | | voir ci-dessous |
+| GET | `/api/mirror?weeks=8` | manager | | voir ci-dessous |
 | GET | `/api/actions` | manager | | `[{ id, week_start, label, done_at }]` (plan d'action de son équipe) |
 | POST | `/api/actions` | manager | `{ label }` | `{ id }` (semaine en cours) |
 | PATCH | `/api/actions` | manager | `{ id, done: bool }` | 204 |
@@ -70,41 +70,46 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 | DELETE | `/api/admin/teams` | admin | `{ id }` (efface aussi son historique) | 204 |
 | POST | `/api/admin/tags` | admin | `{ id?, label }` (sans id : création) | 204 |
 
-`/api/mirror` renvoie `{ "needs_prediction": true }` tant que le pronostic de la semaine n'est pas fait. Sinon :
+`/api/mirror` renvoie `{ "needs_prediction": true }` tant que le pronostic de la semaine n'est pas fait. Sinon (semaines closes uniquement) :
 
 ```json
 {
   "needs_prediction": false,
   "team_size": 8,
-  "avg_daily_responses": 6.9,
-  "recent": { "team_avg": 3.6, "dominant_tag": "Charge de travail" },
-  "matrix": { "responses": 48, "impact": 3.5, "pleasure": 3.9,
-              "zones": { "thriving": 17, "dreamer": 9, "robot": 4, "danger": 2, "middle": 16 },
-              "zone_tags": { "robot": ["Charge de travail"] } },
-  "days":  [{ "day": "2026-10-13", "team_avg": 4.29, "responses": 7 }],
-  "weeks": [{ "week_start": "2026-10-12", "prediction": 3.5, "team_avg": 4.31,
-              "impact": 4.4, "pleasure": 4.2, "gap": -0.81, "dominant_tag": null }]
+  "current": { "week_start": "2026-10-19", "responses": 3 },
+  "last": { "week_start": "2026-10-12", "responses": 8, "team_avg": 4.17,
+            "pleasure": 4.13, "energy": 4.13, "impact": 4.25,
+            "zones": { "thriving": 5, "middle": 3 }, "energy_zones": { "enthusiasm": 7, "middle": 1 },
+            "factors": { "intensite": 4, "autonomie": 3.5, "emotions": 3.88, "relations": 4.38, "sens": 3.75, "securite": 4.13 },
+            "trend": { "better": 5, "same": 3, "worse": 0 }, "tags": ["Management", "Reconnaissance"] },
+  "weeks": [{ "week_start": "2026-10-12", "prediction": 4, "team_avg": 4.17, "pleasure": 4.13, "energy": 4.13,
+              "impact": 4.25, "responses": 8, "gap": -0.17, "dominant_tag": "Management" }]
 }
 ```
 
-- Matrice du bonheur au travail : chaque réponse est un point (impact, plaisir). `team_avg` est la moyenne des deux axes.
-- `matrix` : 7 derniers jours sans aujourd'hui, jours d'au moins 5 réponses ; `null` sinon. Zones : `thriving` (impact et plaisir > 3), `dreamer` (impact < 3, plaisir > 3), `robot` (impact > 3, plaisir < 3), `danger` (les deux < 3), `middle` (un axe à 3).
-- `recent` : moral moyen et sujet dominant des 7 derniers jours (sans aujourd'hui) ; l'écart du Miroir = pronostic de la semaine − `recent.team_avg`, disponible même un lundi.
-- `zone_tags` : les 2 sujets les plus cités par zone, seulement pour les zones d'au moins 5 réponses.
-- `weeks[].impact` / `pleasure` : point de la semaine sur la matrice (trajectoire de l'équipe).
-- `days` : moyenne quotidienne, seulement pour les jours avec au moins 5 réponses.
-- `weeks` : `gap = prediction - team_avg` (positif : le manager surestime). `dominant_tag` est rempli quand `|gap| > 1,5`.
+- Une semaine (lundi → dimanche) n'est publiée qu'une fois close et avec au moins 5 réponses ; la semaine en cours ne montre que son nombre de réponses.
+- Moral (`team_avg`) = moyenne des trois axes ; `gap = prediction - team_avg` (positif : le manager surestimait), angle mort au-delà de 1,5.
+- Deux matrices partagent le plaisir : × impact (`zones` : `thriving`, `dreamer`, `robot`, `danger`) et × énergie (`energy_zones` : `enthusiasm`, `serenity`, `tension`, `dejection`) ; `middle` = un axe à 3.
+- `factors` : les 6 facteurs de risques psychosociaux (Gollac) sur Q3 à Q11, de 1 à 5 (5 = favorable, Q6 inversée).
+
+## Questionnaire hebdomadaire
+
+Ouvert le **jeudi et le vendredi** (les comptes de démo y échappent), une réponse par semaine, environ 2 minutes :
+
+1. 9 affirmations « Cette semaine… » (Q3 à Q11), la tendance par rapport à la semaine d'avant (Q12) et 1 à 3 sujets (Q13).
+2. Le collaborateur se place lui-même : un point sur la matrice plaisir × impact et son niveau d'énergie.
+3. On lui montre ensuite où ses réponses le situent (énergie : Q3 Q4 ; impact : Q5 Q9 Q10 ; plaisir : Q6 inversée, Q7 Q8 Q11) face à là où il s'est placé, dans les deux matrices. Cette comparaison reste sur son appareil.
 
 ## Anonymat
 
-- La table `moods` n'a pas de colonne utilisateur. Une empreinte (hash utilisateur + jour + sel secret) bloque seulement les doubles saisies.
+- La table `moods` n'a pas de colonne utilisateur. Une empreinte (hash utilisateur + semaine + sel secret) bloque seulement les doubles réponses.
 - RLS activée sans aucune policy sur `moods` : aucune lecture directe possible, même avec un token valide.
-- Le manager ne voit que des moyennes, à partir de 5 réponses par jour.
+- Le manager ne voit que des moyennes de semaines closes, à partir de 5 réponses : jamais une moyenne qui bouge réponse après réponse.
 - Le pronostic est obligatoire avant d'afficher le Miroir, et ne peut plus être modifié ensuite.
-- L'admin gère équipes, comptes et tags, mais ne voit que des agrégats : jours passés avec au moins 5 réponses, comme le Miroir. Le rôle manager suit l'équipe (on le nomme depuis l'équipe).
+- L'admin gère équipes, comptes et tags, mais ne voit que des agrégats : semaines closes avec au moins 5 réponses, comme le Miroir. Le rôle manager suit l'équipe (on le nomme depuis l'équipe).
 
 ## Version web
 
-- **Collaborateur** (`/saisie`) : point sur la matrice + 1 à 3 sujets. `/parcours` : sa trajectoire, sa série et sa répartition par zone sur 30 jours, export CSV. Ces données restent dans le navigateur (jamais envoyées).
-- **Manager** (`/miroir`) : pronostic, graphe, trajectoire de l'équipe sur la matrice avec sujets par zone, plan d'action enregistré en base (suggestions, suivi, effet sur le moral la semaine suivante), export CSV et rapport PDF (impression).
-- **Admin** (`/admin`) : équipes, comptes, tags, matrice de l'entreprise (un point par équipe), export CSV et rapport PDF.
+- **Collaborateur** (`/saisie`) : questionnaire de la semaine, placement sur la matrice et comparaison avec ses réponses. `/parcours` : sa trajectoire (impact ou énergie), sa série et sa répartition sur 12 semaines, l'écart moyen entre son ressenti et ses réponses, export CSV. Ces données restent dans le navigateur (jamais envoyées).
+- **Manager** (`/miroir`) : pronostic, graphe semaine par semaine, trajectoire de l'équipe sur les deux matrices, 6 facteurs de risques psychosociaux, tendance et sujets, plan d'action enregistré en base (suggestions, suivi, effet sur le moral la semaine suivante), export CSV et rapport PDF (impression).
+- **Admin** (`/admin`) : équipes, comptes, sujets, matrice de l'entreprise (un point par équipe, impact ou énergie), export CSV et rapport PDF.
