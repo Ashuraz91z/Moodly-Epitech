@@ -189,30 +189,7 @@ a.btn { display: flex; align-items: center; justify-content: center; gap: 8px; t
 .alert-card p { margin: 0; }
 .ok-card { display: flex; align-items: center; gap: 12px; padding: 16px; border-radius: 16px; background: var(--green-soft); color: #065f46; }
 .ok-card svg { flex: none; }
-.checklist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.checklist button { width: 100%; min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); text-align: left; transition: background .15s, border-color .15s; }
-.checklist button:hover { border-color: var(--primary); }
-.checklist button[aria-pressed="true"] { background: var(--green-soft); border-color: #a7f3d0; color: var(--green); text-decoration: line-through; }
-.checklist .box { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border: 2px solid var(--field); border-radius: 7px; color: #fff; transition: background .15s, border-color .15s; }
-.checklist button[aria-pressed="true"] .box { border-color: var(--green); background: var(--green); }
 .miroir-side { display: flex; flex-direction: column; gap: 24px; }
-.plan { display: flex; flex-direction: column; gap: 12px; }
-.plan h2 { margin: 0; }
-.plan p { margin: 0 0 8px; }
-.plan-row { display: flex; align-items: center; gap: 4px; }
-.plan-row > button:first-child { flex: 1; }
-.checklist .plan-row > .icon-btn { flex: none; width: 44px; min-height: 44px; padding: 0; justify-content: center; border-color: transparent; background: none; }
-.plan-add { display: flex; gap: 8px; }
-.plan-add input { flex: 1; min-width: 0; min-height: 44px; padding: 0 14px; border: 1px solid var(--field); border-radius: 12px; font-size: 16px; transition: border-color .15s, box-shadow .15s; }
-.plan-add input:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px #7c3aed26; }
-.chip.idea { display: inline-flex; align-items: center; gap: 6px; border-style: dashed; color: var(--muted); }
-.chip.idea:hover { color: var(--primary); }
-.plan-history ul { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 16px; }
-.plan-history li ul { margin: 6px 0 8px; padding-left: 18px; list-style: disc; gap: 2px; color: var(--muted); font-size: 14px; }
-.plan-history li li.done { color: var(--green); }
-.plan-history .trend { margin-top: 0; }
-.progress { height: 6px; margin-top: 10px; border-radius: 3px; background: var(--line); overflow: hidden; }
-.progress div { height: 100%; background: var(--green); transition: width .3s var(--ease); }
 .chart { position: relative; }
 .chart svg { display: block; touch-action: pan-y; }
 .tooltip { position: absolute; top: 0; pointer-events: none; padding: 8px 10px; border-radius: 10px; background: var(--surface); box-shadow: 0 4px 16px #2e106526; font-size: 13px; white-space: nowrap; }
@@ -430,7 +407,7 @@ select, input[type="search"] { font: inherit; }
 @media print {
   @page { margin: 14mm; }
   body { background: #fff; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-  .no-print, .admin-nav, .toast-zone, .link, .plan-add, .plan-row .icon-btn, .chip.idea, nextjs-portal { display: none !important; }
+  .no-print, .admin-nav, .toast-zone, .link, nextjs-portal { display: none !important; }
   .admin { display: block; }
   .admin-main, .screen, .screen.wide { max-width: none; width: auto; margin: 0; padding: 0; box-shadow: none; border-radius: 0; }
   .panel, .kpi, .tile, .chart-block, .matrix-frame { break-inside: avoid; }
@@ -601,31 +578,19 @@ body:has(.demo-float) .screen { padding-bottom: 96px; }
   .wizard-main h1 { font-size: 30px; }
 }
 
-/* Plan d'action : leviers, actions suivies, effet mesuré, partage */
-.plan h3 { margin: 0 0 8px; font-size: 15px; }
-.plan h3 small { color: var(--muted); font-weight: 400; }
-.levers { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 16px; background: var(--soft); }
-.lever { display: flex; flex-direction: column; gap: 8px; }
-.lever-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.lever .chip.idea { background: var(--surface); }
-.checklist .action { display: flex; flex-direction: column; gap: 4px; }
-.checklist .share { flex: none; width: auto; min-height: 36px; gap: 6px; padding: 0 10px; border-radius: 999px; color: var(--muted); font-size: 13px; font-weight: 600; }
-.checklist .share.on { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); }
-.action-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding-left: 48px; color: var(--muted); font-size: 13px; }
-.action-meta .trend, .plan-history .trend { margin: 0; padding: 2px 10px; font-size: 13px; }
-.trend.flat { background: var(--soft); color: var(--muted); }
-.plan-add { flex-wrap: wrap; }
-.plan-add input { flex-basis: 100%; }
-.plan-add select { flex: 1; min-width: 0; }
-.plan-add select { min-height: 44px; padding: 0 10px; border: 1px solid var(--field); border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; font-size: 15px; }
-.plan-history li { display: flex; flex-direction: column; gap: 4px; }
+/* Miroir : ce que l'équipe demande (vote de fin de questionnaire) */
+.votes { display: flex; flex-direction: column; gap: 12px; }
+.votes h2, .votes p { margin: 0; }
+.wish-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.wish-list li { display: grid; grid-template-columns: minmax(0, 1.3fr) 1fr 44px; align-items: center; gap: 4px 12px; font-size: 14px; }
+.wish-list .meter { max-width: none; margin: 0; height: 8px; }
+.wish-list b { text-align: right; font-variant-numeric: tabular-nums; }
+.wish-list small { grid-column: 1 / -1; margin-top: -4px; color: var(--muted); font-size: 12px; }
+.wish-list li.top span { font-weight: 700; }
+.wish-list li.top .meter div { background: var(--primary); }
+.wish-list li.calm { color: var(--muted); }
+.wish-list li.calm .meter div { background: var(--green); }
 
-/* Collaborateur : actions partagées par le manager */
-.team-actions h2 { margin-bottom: 4px; }
-.team-actions > p { margin: 0 0 12px; }
-.team-actions ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
-.team-actions li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; }
-.team-actions li small { flex-basis: 100%; color: var(--muted); }
 
 /* Miroir : justesse du regard du manager */
 .accuracy { display: grid; gap: 20px; }
@@ -658,3 +623,23 @@ body:has(.demo-float) .screen { padding-bottom: 96px; }
 .diverge-legend { display: grid; grid-template-columns: 1fr 1fr; margin: 4px calc(9.5em + 12px) 0 calc(5.5em + 12px); color: var(--muted); font-size: 11px; }
 .diverge-legend span:last-child { text-align: right; }
 @media (min-width: 720px) { .wide > .accuracy { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; } .accuracy > h2, .accuracy > .verdict { grid-column: 1 / -1; } }
+
+/* Miroir : matrice de l'équipe, titre, verdict et matrice espacés */
+.matrix-block { display: flex; flex-direction: column; gap: 16px; }
+.matrix-block > h2, .matrix-block > .verdict { margin: 0; }
+.mark.up em { top: auto; bottom: 100%; transform: translate(-50%, -6px); }
+.mark.up.edge-r em { transform: translateY(-6px); }
+.mark.up.edge-l em { transform: translateY(-6px); }
+
+/* Miroir : ton équipe face à l'entreprise */
+.benchmark { display: grid; gap: 20px; }
+.benchmark h2, .benchmark h3, .benchmark > p { margin: 0; }
+.benchmark h3 { margin-bottom: 8px; font-size: 15px; }
+.benchmark h3 small { color: var(--muted); font-weight: 400; }
+.benchmark-matrix { display: flex; flex-direction: column; gap: 12px; }
+.benchmark-matrix .matrix-frame { max-width: 420px; }
+.benchmark-factors .verdict { margin-top: 16px; }
+.accuracy-axes.bench li { grid-template-columns: 11em minmax(0, 1fr) 10em; }
+.accuracy-axes.bench small b { color: var(--text); }
+.diverge-legend.bench { margin: 4px calc(10em + 12px) 0 calc(11em + 12px); }
+@media (min-width: 720px) { .wide > .benchmark { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr); column-gap: 32px; align-items: start; } .benchmark > h2, .benchmark > p { grid-column: 1 / -1; } }

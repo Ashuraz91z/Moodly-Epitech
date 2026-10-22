@@ -16,7 +16,7 @@ const STEPS = [
   {
     as: "manager", label: "Manager", paths: ["/miroir"],
     who: "Tu es Thomas, manager de l'Équipe Produit.",
-    todo: "Place ton équipe sur la matrice, puis compare avec ce qu'elle a répondu. Il y a un mois, angle mort de près de 2 points sur la charge : regarde dans le plan d'action ce que Thomas a fait et l'effet mesuré.",
+    todo: "Place ton équipe sur la matrice, puis compare avec ce qu'elle a répondu. Regarde aussi ce que l'équipe demande et comment elle se situe face au reste de l'entreprise.",
   },
   {
     as: "admin", label: "RH", paths: ["/admin"],

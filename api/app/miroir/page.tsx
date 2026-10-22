@@ -6,7 +6,8 @@ import { api, ApiError, type Mirror } from "@/lib/api";
 import { Logout } from "../logout";
 import { Icon, Loader, type IconName } from "../icons";
 import { MatrixInput, TeamMatrix, ZONES, zoneOf, type Point } from "../matrix";
-import { ActionPlan } from "./plan";
+import { TeamVotes } from "./votes";
+import { Benchmark } from "./benchmark";
 import { Accuracy, lastAccuracy } from "./accuracy";
 import { FACTORS, USEFUL } from "../questionnaire";
 import { downloadCsv } from "@/lib/csv";
@@ -250,12 +251,14 @@ export default function Miroir() {
           <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception était proche du ressenti de l&apos;équipe la semaine dernière.</div>
         ) : null}
 
-        <ActionPlan last={last} weeks={mirror.weeks} today={today} />
+        <TeamVotes />
       </div>
 
       <Accuracy weeks={mirror.weeks} />
 
       {last && <Factors last={last} />}
+
+      {last && <Benchmark last={last} teamSize={mirror.team_size} />}
 
       <details>
         <summary>Voir les données du graphe</summary>

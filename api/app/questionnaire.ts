@@ -23,6 +23,18 @@ export const TRENDS = [
 ];
 export const USEFUL = ["Pas du tout", "Un peu", "Moyennement", "Plutôt", "Tout à fait"];
 
+// Vote de fin de questionnaire : ce qui aiderait le plus, un choix par facteur (même ordre que FACTORS).
+export const WISHES = [
+  { key: "intensite", label: "Alléger la charge ou mieux prioriser" },
+  { key: "autonomie", label: "Plus de liberté pour m'organiser" },
+  { key: "emotions", label: "Être soutenu·e face aux situations tendues" },
+  { key: "relations", label: "Plus d'échanges et de reconnaissance" },
+  { key: "sens", label: "Mieux voir à quoi sert mon travail" },
+  { key: "securite", label: "Plus de visibilité sur l'avenir" },
+  { key: "rien", label: "Rien de particulier, ça va" },
+] as const;
+export type WishKey = (typeof WISHES)[number]["key"];
+
 // 5 = toujours favorable (Q6 inversée).
 const note = (answers: number[], i: number) => (i === 3 ? 6 - answers[i] : answers[i]);
 const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / xs.length;
