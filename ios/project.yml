@@ -1,0 +1,36 @@
+# Projet Xcode généré : `cd ios && xcodegen` (le .xcodeproj n'est pas versionné).
+name: Moodly
+options:
+  bundleIdPrefix: com.moodly
+  deploymentTarget:
+    iOS: "17.0"
+targets:
+  Moodly:
+    type: application
+    platform: iOS
+    sources: [Moodly]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: moodly
+        # Signature : équipe personnelle « Lucas Fernandes » (compte Apple gratuit).
+        DEVELOPMENT_TEAM: S57686D5DQ
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        # Adresse de l'API par défaut, à surcharger au build : MOODLY_API=http://10.0.0.2:3001
+        MOODLY_API: http://localhost:3001
+    info:
+      path: Moodly/Info.plist
+      properties:
+        CFBundleDisplayName: Moodly
+        UILaunchScreen:
+          UIColorName: ""
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # Adresse de l'API par défaut (modifiable sur l'écran de connexion).
+        MoodlyAPI: $(MOODLY_API)
+        NSLocalNetworkUsageDescription: Moodly se connecte au serveur de ton entreprise sur le réseau local.
+        # ponytail: HTTP autorisé pour l'API du réseau local ; en production, HTTPS et retirer cette clé.
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true

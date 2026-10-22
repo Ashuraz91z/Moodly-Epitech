@@ -1,1 +1,6 @@
 .DS_Store
+
+# App iOS : projet Xcode, Info.plist et build générés par xcodegen
+ios/build/
+ios/*.xcodeproj/
+ios/Moodly/Info.plist
