@@ -253,19 +253,15 @@ function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, t
   const step = STEPS[q];
   const last = q === STEPS.length - 1;
 
-  // Passe à la suivante après un choix à la souris ou au doigt (pas aux flèches du clavier).
-  const advance = (k: number) => setTimeout(() => setQ((cur) => (cur === k && k < STEPS.length - 1 ? k + 1 : cur)), 260);
   const setAnswer = (k: number, v: number) => setAnswers((a) => a.map((x, i) => (i === k ? v : x)));
 
-  // Touches 1 à 5 sur les affirmations.
+  // Clavier : 1 à 5 répondent aux affirmations, Entrée passe à la suivante. Un choix ne fait jamais avancer seul.
   useEffect(() => {
-    if (step.kind !== "agree") return;
     const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
       const v = Number(e.key);
-      if (v >= 1 && v <= 5 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-        setAnswers((a) => a.map((x, i) => (i === q ? v : x)));
-        advance(q);
-      }
+      if (step.kind === "agree" && v >= 1 && v <= 5) setAnswer(q, v);
+      else if (e.key === "Enter" && !last && answered(q) && !(e.target as Element).closest?.("button, a, textarea")) go(q + 1);
     };
     addEventListener("keydown", onKey);
     return () => removeEventListener("keydown", onKey);
@@ -276,13 +272,13 @@ function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, t
     scrollTo({ top: 0 });
   }
 
-  const options = (name: string, labels: string[], value: number | null, onPick: (v: number) => void, values?: number[], auto = true) => (
+  const options = (name: string, labels: string[], value: number | null, onPick: (v: number) => void, values?: number[]) => (
     <div className="answers" role="radiogroup">
       {labels.map((label, i) => {
         const v = values?.[i] ?? i + 1;
         return (
           <label key={label} className="answer">
-            <input type="radio" name={name} checked={value === v} onChange={() => onPick(v)} onClick={(e) => auto && e.detail > 0 && advance(q)} />
+            <input type="radio" name={name} checked={value === v} onChange={() => onPick(v)} />
             {!values && <span className="n">{v}</span>}
             {label}
           </label>
@@ -327,7 +323,7 @@ function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, t
               <h1>{STATEMENTS[q]}</h1>
             </div>
             {options(`q${q}`, AGREE, answers[q], (v) => setAnswer(q, v))}
-            <p className="hint wizard-keys">Astuce : touches 1 à 5 au clavier.</p>
+            <p className="hint wizard-keys">Astuce : touches 1 à 5 pour répondre, Entrée pour continuer.</p>
           </>
         )}
         {step.kind === "trend" && (
@@ -372,7 +368,7 @@ function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, t
         {step.kind === "useful" && (
           <>
             <div className="intro"><h1>As-tu eu le sentiment d&apos;être utile cette semaine ?</h1></div>
-            {options("impact", USEFUL, impact, setImpact, undefined, false)}
+            {options("impact", USEFUL, impact, setImpact)}
           </>
         )}
 
