@@ -32,6 +32,21 @@ Sur la page de connexion, **Lancer la démo guidée** remet toute la démo à z�
 - `seed.sql` fait la même remise à zéro, rejouable à volonté.
 - `DEMO_PASSWORD=` (vide) dans l'environnement de l'API désactive l'entrée en démo.
 
+## App iOS
+
+`ios/` : app SwiftUI (iOS 17+) pour les trois rôles, qui ne parle qu'à l'API.
+
+- **Collaborateur** : questionnaire écran par écran (sélection seule, « Suivante » pour avancer), matrice, comparaison ressenti / réponses, Mon parcours (gardé sur l'appareil), rappel le jeudi à 10 h.
+- **Manager** : pronostic sur la matrice, puis le Miroir (météo, justesse, graphe, matrice de l'équipe, votes, facteurs, comparaison avec l'entreprise), export CSV.
+- **RH** : vue d'ensemble, équipes, comptes et sujets.
+- **Démo** : sur l'écran de connexion, comme sur le web, avec le bandeau des 3 étapes.
+
+```bash
+cd ios && xcodegen && open Moodly.xcodeproj
+```
+
+L'adresse de l'API se règle sur l'écran de connexion (« Serveur ») : `http://localhost:3001` dans le simulateur, l'adresse de l'ordinateur sur le Wi-Fi depuis un iPhone. En debug, `-demoRole employee|manager|admin` (et `-demoReset NO`) au lancement entre directement dans la démo.
+
 ## Authentification
 
 La version web utilise les mêmes routes : la connexion pose les tokens en cookies httpOnly, renouvelés automatiquement.
