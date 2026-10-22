@@ -55,13 +55,11 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 | GET | `/api/me` | tous | | `{ id, role: "employee" \| "manager" \| "admin", team: { id, name } \| null }` |
 | GET | `/api/tags` | tous | | `[{ id, label }]` |
 | GET | `/api/moods/week` | collaborateur | | `{ submitted, open, opens_on }` (fenêtre jeudi-vendredi) |
-| POST | `/api/moods` | collaborateur | `{ pleasure, energy, impact: 1-5, answers: [9 notes 1-5], trend: -1/0/1, tagIds: [1 à 3 ids] }` | 204, une fois par semaine |
+| POST | `/api/moods` | collaborateur | `{ pleasure, energy, impact: 1-5, answers: [9 notes 1-5], trend: -1/0/1, tagIds: [1 à 3 ids], wish? }` (vote : `intensite`… `securite` ou `rien`) | 204, une fois par semaine |
 | POST | `/api/predictions` | manager | `{ pleasure, energy, impact: 1-5 }` (son équipe placée sur la matrice) | 204, une fois par semaine |
 | GET | `/api/mirror?weeks=8` | manager | | voir ci-dessous |
-| GET | `/api/actions` | manager, collaborateur | | `[{ id, week_start, label, factor, shared, done_at }]` (le collaborateur ne voit que les actions partagées) |
-| POST | `/api/actions` | manager | `{ label, factor? }` (`intensite`, `autonomie`, `emotions`, `relations`, `sens`, `securite`) | `{ id }` (semaine en cours) |
-| PATCH | `/api/actions` | manager | `{ id, done?: bool, shared?: bool }` | 204 |
-| DELETE | `/api/actions` | manager | `{ id }` | 204 |
+| GET | `/api/benchmark` | manager | | moyennes de l'entreprise sur la dernière semaine close (`teams`, `responses`, `participation`, `team_avg`, `pleasure`, `energy`, `impact`, `factors`, `energy_zones`), équipes à 5 réponses minimum |
+| GET | `/api/wishes?weeks=8` | manager | | `[{ week_start, votes, wishes: { intensite: 3, rien: 1, … } }]` (semaines closes, à partir de 5 votes) |
 | GET | `/api/admin` | admin | | `{ stats, teams, users, tags }` (agrégats uniquement) |
 | POST | `/api/admin/users` | admin | `{ email, password, role: "employee" \| "admin", teamId? }` | id du compte |
 | PATCH | `/api/admin/users` | admin | `{ id, role, teamId? }` | 204 |
@@ -91,7 +89,7 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 - Une semaine (lundi → dimanche) n'est publiée qu'une fois close et avec au moins 5 réponses ; la semaine en cours ne montre que son nombre de réponses.
 - Le pronostic (`forecast`) est un point sur la matrice et une utilité ; `prediction` en est la moyenne.
 - Moral (`team_avg`) = moyenne des trois axes ; `gap = prediction - team_avg` (positif : le manager surestimait), angle mort au-delà de 1,5.
-- Plan d'action : chaque action peut viser un facteur ; son effet se lit de la semaine close avant son lancement à la dernière semaine close (`weeks[].factors`).
+- Vote de fin de questionnaire : le manager voit ce que son équipe demande le plus (`/api/wishes`), et compare son équipe à l'entreprise (`/api/benchmark`).
 - La matrice affichée est plaisir × énergie (`energy_zones` : `enthusiasm` « En forme », `serenity` « Serein·e », `tension` « Sous pression », `dejection` « À bout », `middle` « Mitigé », un axe à 3). Le 3e axe, l'impact (sentiment d'avoir été utile), s'affiche en jauge. `zones` (plaisir × impact) reste fourni mais n'est pas affiché.
 - `factors` : les 6 facteurs de risques psychosociaux (Gollac) sur Q3 à Q11, de 1 à 5 (5 = favorable, Q6 inversée).
 
@@ -114,5 +112,5 @@ Ouvert le **jeudi et le vendredi** (les comptes de démo y échappent), une rép
 ## Version web
 
 - **Collaborateur** (`/saisie`) : questionnaire de la semaine, placement sur la matrice et comparaison avec ses réponses. `/parcours` : sa trajectoire sur la matrice, son utilité ressentie, sa série et sa répartition sur 12 semaines, l'écart moyen entre son ressenti et ses réponses, export CSV. Ces données restent dans le navigateur (jamais envoyées).
-- **Manager** (`/miroir`) : pronostic, graphe semaine par semaine, trajectoire de l'équipe sur la matrice, utilité ressentie, 6 facteurs de risques psychosociaux, tendance et sujets, plan d'action enregistré en base (suggestions, suivi, effet sur le moral la semaine suivante), export CSV et rapport PDF (impression).
+- **Manager** (`/miroir`) : pronostic, graphe semaine par semaine, trajectoire de l'équipe sur la matrice, utilité ressentie, 6 facteurs de risques psychosociaux, tendance et sujets, justesse du pronostic, ce que l'équipe demande (vote), comparaison avec l'entreprise, export CSV et rapport PDF (impression).
 - **Admin** (`/admin`) : équipes, comptes, sujets, matrice de l'entreprise (un point par équipe), export CSV et rapport PDF.

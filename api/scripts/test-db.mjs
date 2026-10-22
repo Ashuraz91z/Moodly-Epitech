@@ -58,7 +58,7 @@ await fails("42501", "anon", null, "select get_mirror()");
 // Saisie collaborateur (comptes de démo : fenêtre jeudi-vendredi levée).
 assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.submitted, false);
 assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.open, true, "démo ouverte tous les jours");
-await as("authenticated", INES, Q());
+await as("authenticated", INES, "select submit_mood(4, 4, 4, array[4,4,4,2,4,4,4,4,4], 1, array[1, 3], 'sens')"); // avec un vote
 assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.submitted, true);
 await fails("23505", "authenticated", INES, Q()); // une seule réponse par semaine
 await fails("22023", "authenticated", LEA, Q(6));
@@ -70,6 +70,7 @@ await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 0, "array[]::in
 await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 0, "array[1, 2, 3, 4]"));
 await fails("22023", "authenticated", LEA, Q(3, 3, 3, undefined, 0, "array[99]"));
 await fails("42501", "authenticated", THOMAS, Q());
+await fails("22023", "authenticated", LEA, "select submit_mood(3, 3, 3, array[4,4,4,2,4,4,4,4,4], 0, array[1], 'inconnu')");
 
 // Miroir : réservé au manager, pronostic d'abord, une seule fois par semaine.
 await fails("42501", "authenticated", INES, "select get_mirror()");
@@ -117,9 +118,26 @@ await fails("23514", "authenticated", THOMAS, "insert into actions (team_id, lab
 await fails("42501", "authenticated", INES, "insert into actions (team_id, label) values ($1, 'x')", [TEAM]);
 await fails("23514", "authenticated", THOMAS, "insert into actions (team_id, label) values ($1, '  ')", [TEAM]);
 await as("authenticated", INES, "update actions set done_at = null");
-assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions where done_at is not null"))[0].n, 2, "l'équipe ne modifie rien");
+assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions where done_at is not null"))[0].n, 1, "l'équipe ne modifie rien");
 await as("authenticated", THOMAS, "update actions set done_at = now()");
 assert.ok((await as("authenticated", THOMAS, "select done_at from actions"))[0].done_at);
+
+// Votes de l'équipe : manager seulement, semaines closes, au moins 5 votes, jamais la semaine en cours.
+await fails("42501", "authenticated", INES, "select get_wishes()");
+const wishes = (await as("authenticated", THOMAS, "select get_wishes() w"))[0].w;
+assert.ok(wishes.length >= 6 && wishes.every((w) => w.votes >= 5 && w.week_start < m.current.week_start));
+assert.ok(wishes.every((w) => Object.values(w.wishes).reduce((a, b) => a + b, 0) === w.votes));
+assert.ok((wishes[0].wishes.rien ?? 0) < wishes[0].votes / 2, "au début, l'équipe en difficulté demande de l'aide");
+
+// Mon équipe face à l'entreprise : manager seulement, dernière semaine close, agrégats seulement.
+await fails("42501", "authenticated", INES, "select get_benchmark()");
+const bench = (await as("authenticated", THOMAS, "select get_benchmark() b"))[0].b;
+assert.equal(bench.week_start, L.week_start);
+assert.equal(bench.teams, 3, "les 3 équipes ont au moins 5 réponses");
+assert.ok(bench.responses >= 15 && bench.participation > 0.5);
+assert.deepEqual(Object.keys(bench.factors).sort(), ["autonomie", "emotions", "intensite", "relations", "securite", "sens"]);
+assert.equal(sum(bench.energy_zones), bench.responses);
+assert.ok(!JSON.stringify(bench).includes("answers"), "aucune réponse brute");
 
 // Back-office : réservé à l'admin, agrégats seulement.
 await fails("42501", "authenticated", THOMAS, "select admin_dashboard()");
@@ -187,6 +205,6 @@ assert.equal(reset.tags[8].label, "Autonomie");
 assert.equal(reset.tags[1].label, "Ambiance", "libellés d'origine");
 assert.equal((await as("authenticated", INES, "select week_status() s"))[0].s.submitted, false, "Inès répond elle-même");
 assert.deepEqual((await as("authenticated", THOMAS, "select get_mirror() m"))[0].m, { needs_prediction: true }, "pronostic à refaire");
-assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions"))[0].n, 3);
+assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions"))[0].n, 2);
 
 console.log("OK", JSON.stringify(m, null, 1));

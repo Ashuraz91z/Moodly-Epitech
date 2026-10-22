@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { LastWeek } from "@/lib/api";
-import { FORECAST, fmt } from "./miroir/chart";
+import { FORECAST, TEAM, fmt } from "./miroir/chart";
 
 // Matrice du moral (modèle de Warr) : plaisir en hauteur, énergie en largeur, de 1 à 5.
 // Le 3e axe, l'impact (sentiment d'avoir été utile), s'affiche à côté en jauge.
@@ -114,7 +114,7 @@ export function MatrixInput({ value, onChange, team = false }: { value: Point | 
 const shortDate = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
 const coords = (p: Point) => `${(energyOf(p) - 0.5) * 20},${(5.5 - p.pleasure) * 20}`;
 
-export type Mark = { p: Point; title: string; label?: string; color?: string; strong?: boolean };
+export type Mark = { p: Point; title: string; label?: string; color?: string; strong?: boolean; up?: boolean };
 
 // Matrice en lecture : contenu libre par zone, points reliés dans l'ordre (trail), dernier point mis en avant.
 export function MatrixPlot({ marks, label, trail = false, zones }: {
@@ -139,7 +139,7 @@ export function MatrixPlot({ marks, label, trail = false, zones }: {
           return (
             <span
               key={i}
-              className={`mark${last ? " last" : ""}${x > 4 ? " edge-r" : x < 2 ? " edge-l" : ""}`}
+              className={`mark${last ? " last" : ""}${m.up ? " up" : ""}${x > 4 ? " edge-r" : x < 2 ? " edge-l" : ""}`}
               title={m.title}
               style={{ ...pos(m.p), background: m.color, opacity: last || !trail ? undefined : 0.35 + 0.65 * (k / (path.length - 1)) }}
             >
@@ -184,8 +184,10 @@ export function TeamMatrix({ data, weeks, forecast }: {
     p: { impact: w.impact ?? 0, pleasure: w.pleasure!, energy: w.energy! },
     title: `Semaine du ${shortDate(w.week_start)}`,
     label: i === path.length - 1 ? "Équipe" : i === 0 ? shortDate(w.week_start) : undefined,
+    color: TEAM,
   }));
-  if (forecast) marks.push({ p: forecast, title: "Ton pronostic", label: "Ton pronostic", color: FORECAST, strong: true });
+  // Étiquette au-dessus : elle ne recouvre pas celle de l'équipe quand les deux points sont proches.
+  if (forecast) marks.push({ p: forecast, title: "Ton pronostic", label: "Ton pronostic", color: FORECAST, strong: true, up: true });
   const middle = Math.round(((counts.middle ?? 0) / data.responses) * 100);
   return (
     <div className="team-matrix">
@@ -196,7 +198,7 @@ export function TeamMatrix({ data, weeks, forecast }: {
         label={`Trajectoire de l'équipe : ${marks.map((m) => `${m.title}, plaisir ${fmt(m.p.pleasure)}, énergie ${fmt(energyOf(m.p))}`).join(" ; ")}.`}
       />
       <Usefulness rows={[
-        { label: "Équipe", value: data.impact },
+        { label: "Équipe", value: data.impact, color: TEAM },
         ...(forecast ? [{ label: "Ton pronostic", value: forecast.impact, color: FORECAST }] : []),
       ]} />
       <p className="muted small">

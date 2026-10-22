@@ -3,22 +3,23 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, ApiError, type Action, type Me, type Tag } from "@/lib/api";
+import { api, ApiError, type Me, type Tag } from "@/lib/api";
 import { fmt, todayInParis } from "../miroir/chart";
 import { Logout } from "../logout";
 import { Icon, Loader } from "../icons";
 import { Compare, MatrixInput, ZONES, zoneOf, type Point } from "../matrix";
 import { ONBOARDING_KEY, historyKey, lastWeeks, mondayOf, readHistory, streak, type Entry, type History } from "../history";
-import { AGREE, FACTORS, SHORT, STATEMENTS, TRENDS, USEFUL, compareText, factorsOf, fromAnswers, needsHelp } from "../questionnaire";
+import { AGREE, SHORT, STATEMENTS, TRENDS, USEFUL, WISHES, compareText, factorsOf, fromAnswers, needsHelp } from "../questionnaire";
 
 type Step = "loading" | "onboarding" | "closed" | "questions" | "done";
 
 // Le questionnaire, écran par écran : 9 affirmations, le bilan de la semaine, puis le ressenti.
-type Kind = "agree" | "trend" | "tags" | "matrix" | "useful";
+type Kind = "agree" | "trend" | "tags" | "wish" | "matrix" | "useful";
 const STEPS: { kind: Kind; short: string; group: string }[] = [
   ...SHORT.map((short) => ({ kind: "agree" as const, short, group: "Ta semaine" })),
   { kind: "trend", short: "Comparée à la précédente", group: "Le bilan" },
   { kind: "tags", short: "Ce qui a pesé", group: "Le bilan" },
+  { kind: "wish", short: "Ce qui t'aiderait", group: "Le bilan" },
   { kind: "matrix", short: "Ta place sur la matrice", group: "Ton ressenti" },
   { kind: "useful", short: "Sentiment d'utilité", group: "Ton ressenti" },
 ];
@@ -52,31 +53,6 @@ function Help() {
         <li>en cas de détresse, le <strong>3114</strong> : gratuit, 24 h/24, 7 j/7.</li>
       </ul>
     </div>
-  );
-}
-
-// Ce que le manager a choisi de partager : la preuve que les réponses servent.
-function TeamActions() {
-  const [actions, setActions] = useState<Action[]>([]);
-  useEffect(() => {
-    api<Action[]>("/api/actions").then(setActions, () => {});
-  }, []);
-  const shown = actions.filter((a) => !a.done_at).concat(actions.filter((a) => a.done_at)).slice(0, 4);
-  if (!shown.length) return null;
-  return (
-    <section className="team-actions">
-      <h2>Ce que ton équipe met en place</h2>
-      <p className="muted small">Décidé par ton manager à partir des résultats anonymes de l&apos;équipe.</p>
-      <ul>
-        {shown.map((a) => (
-          <li key={a.id}>
-            <span className={`pill ${a.done_at ? "good" : "role"}`}>{a.done_at ? "Fait" : "En cours"}</span>
-            <span>{a.label}</span>
-            {a.factor && <small>{FACTORS.find((f) => f.key === a.factor)!.label}</small>}
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 
@@ -119,8 +95,6 @@ function Done({ history }: { history: History }) {
 
       {entry && needsHelp(entry, entry.answers) && <Help />}
 
-      <TeamActions />
-
       {n > 0 && (
         <div>
           <div className="streak">
@@ -151,6 +125,7 @@ export default function Saisie() {
   const [picked, setPicked] = useState<number[]>([]);
   const [point, setPoint] = useState<Point | null>(null);
   const [impact, setImpact] = useState<number | null>(null);
+  const [wish, setWish] = useState<number | null>(null); // index dans WISHES
   const [q, setQ] = useState(0);
   const [history, setHistory] = useState<History>({});
   const [userId, setUserId] = useState("");
@@ -190,7 +165,7 @@ export default function Saisie() {
     setBusy(true);
     const all = answers as number[];
     try {
-      await api("/api/moods", { pleasure: point!.pleasure, energy: point!.energy, impact, answers: all, trend, tagIds: picked });
+      await api("/api/moods", { pleasure: point!.pleasure, energy: point!.energy, impact, answers: all, trend, tagIds: picked, wish: WISHES[wish!].key });
       const entry: Entry = { impact: impact!, pleasure: point!.pleasure, energy: point!.energy!, answers: all };
       const next = { ...readHistory(userId), [mondayOf(todayInParis())]: entry };
       try { localStorage.setItem(historyKey(userId), JSON.stringify(next)); } catch {}
@@ -247,7 +222,7 @@ export default function Saisie() {
     return <main className="screen"><Header />{error ? <p className="error" role="alert">{error}</p> : <Loader />}</main>;
   }
 
-  return <Wizard {...{ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, toggle, point, setPoint, impact, setImpact, error, busy, send }} />;
+  return <Wizard {...{ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, toggle, wish, setWish, point, setPoint, impact, setImpact, error, busy, send }} />;
 }
 
 type WizardProps = {
@@ -255,15 +230,23 @@ type WizardProps = {
   answers: (number | null)[]; setAnswers: React.Dispatch<React.SetStateAction<(number | null)[]>>;
   trend: number | null; setTrend: (v: number) => void;
   tags: Tag[]; picked: number[]; toggle: (id: number) => void;
+  wish: number | null; setWish: (v: number) => void;
   point: Point | null; setPoint: (p: Point) => void;
   impact: number | null; setImpact: (v: number) => void;
   error: string; busy: boolean; send: () => void;
 };
 
 // Une question par écran, avec la liste des questions sur le côté (barre de progression sur mobile).
-function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, toggle, point, setPoint, impact, setImpact, error, busy, send }: WizardProps) {
+function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, toggle, wish, setWish, point, setPoint, impact, setImpact, error, busy, send }: WizardProps) {
   const answered = (k: number) =>
-    k < 9 ? answers[k] != null : k === 9 ? trend != null : k === 10 ? picked.length > 0 : k === 11 ? point?.energy != null : impact != null;
+    ({
+      agree: answers[k] != null,
+      trend: trend != null,
+      tags: picked.length > 0,
+      wish: wish != null,
+      matrix: point?.energy != null,
+      useful: impact != null,
+    })[STEPS[k].kind];
   const firstOpen = STEPS.findIndex((_, k) => !answered(k));
   const reachable = (k: number) => firstOpen === -1 || k <= firstOpen;
   const done = STEPS.filter((_, k) => answered(k)).length;
@@ -276,7 +259,7 @@ function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, t
 
   // Touches 1 à 5 sur les affirmations.
   useEffect(() => {
-    if (q >= 9) return;
+    if (step.kind !== "agree") return;
     const onKey = (e: KeyboardEvent) => {
       const v = Number(e.key);
       if (v >= 1 && v <= 5 && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -366,6 +349,15 @@ function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, t
                 </button>
               ))}
             </div>
+          </>
+        )}
+        {step.kind === "wish" && (
+          <>
+            <div className="intro">
+              <h1>Qu&apos;est-ce qui t&apos;aiderait le plus en ce moment ?</h1>
+              <p className="sub">Ton choix compte, anonymement, dans le vote de l&apos;équipe : ton manager voit ce que l&apos;équipe demande le plus.</p>
+            </div>
+            {options("wish", WISHES.map((w) => w.label), wish, setWish, WISHES.map((_, i) => i))}
           </>
         )}
         {step.kind === "matrix" && (

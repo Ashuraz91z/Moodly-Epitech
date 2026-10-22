@@ -47,4 +47,11 @@ export type Admin = {
   users: AdminUser[];
   tags: (Tag & { uses: number })[];
 };
-export type Action = { id: string; week_start: string; label: string; factor: FactorKey | null; shared: boolean; done_at: string | null };
+// Moyennes de l'entreprise, dernière semaine close : pour comparer son équipe.
+export type Benchmark = {
+  week_start: string; teams: number; responses: number; participation: number | null;
+  team_avg: number; pleasure: number; energy: number; impact: number;
+  factors: Record<FactorKey, number> | null; energy_zones: Partial<Record<Zone, number>>;
+};
+// Votes « ce qui m'aiderait le plus » d'une semaine close : facteur (ou « rien ») → nombre de votes.
+export type Wishes = { week_start: string; votes: number; wishes: Partial<Record<FactorKey | "rien", number>> };
