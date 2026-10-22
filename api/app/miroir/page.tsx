@@ -7,6 +7,7 @@ import { Logout } from "../logout";
 import { Icon, Loader, type IconName } from "../icons";
 import { MatrixInput, TeamMatrix, ZONES, zoneOf, type Point } from "../matrix";
 import { ActionPlan } from "./plan";
+import { Accuracy, lastAccuracy } from "./accuracy";
 import { FACTORS, USEFUL } from "../questionnaire";
 import { downloadCsv } from "@/lib/csv";
 import { FORECAST, MirrorChart, TEAM, fmt, todayInParis } from "./chart";
@@ -143,6 +144,10 @@ export default function Miroir() {
   const first = mirror.weeks.find((w) => w.gap != null);
   const participation = last && mirror.team_size ? Math.round((last.responses / mirror.team_size) * 100) : null;
   const forecast = row?.forecast ?? null;
+  // Récap : moral face à la semaine close précédente, justesse du pronostic.
+  const closed = mirror.weeks.filter((w) => w.team_avg != null);
+  const moralDelta = closed.length > 1 ? closed.at(-1)!.team_avg! - closed.at(-2)!.team_avg! : null;
+  const acc = lastAccuracy(mirror.weeks);
 
   function exportCsv() {
     if (mirror?.needs_prediction !== false) return;
@@ -173,6 +178,7 @@ export default function Miroir() {
               Semaine du {shortDate(last.week_start)} :{" "}
               {prediction != null && <>tu pensais <strong style={{ color: FORECAST }}>{fmt(prediction)}</strong> · </>}
               l&apos;équipe était à <strong style={{ color: TEAM }}>{fmt(teamAvg)}</strong> / 5
+              {moralDelta != null && Math.abs(moralDelta) >= 0.05 && <> ({moralDelta > 0 ? "+" : "−"}{fmt(Math.abs(moralDelta))} sur une semaine)</>}
             </p>
           </div>
         </div>
@@ -182,9 +188,13 @@ export default function Miroir() {
 
       <div className="tiles three">
         <div className={`tile${blind ? " alert" : ""}`}>
-          <span>Écart · semaine dernière{blind ? " · angle mort" : ""}</span>
-          <strong>{gap == null ? "—" : `${fmt(Math.abs(gap))} pt`}</strong>
-          <span>{gap == null ? "Pas de pronostic ou pas assez de réponses" : gap > 0 ? "Tu surestimais" : gap < 0 ? "Tu sous-estimais" : "Lecture juste"}</span>
+          <span>Justesse de ton regard{blind ? " · angle mort" : ""}</span>
+          <strong>{acc.now == null ? "—" : `${acc.now} %`}</strong>
+          <span>
+            {acc.now == null
+              ? gap == null ? "Pas de pronostic ou pas assez de réponses" : `Écart de moral : ${fmt(Math.abs(gap))} pt`
+              : acc.before == null || acc.now === acc.before ? "semaine dernière" : `${acc.now > acc.before ? "+" : "−"}${Math.abs(acc.now - acc.before)} pts sur une semaine`}
+          </span>
         </div>
         <div className="tile">
           <span>Participation</span>
@@ -242,6 +252,8 @@ export default function Miroir() {
 
         <ActionPlan last={last} weeks={mirror.weeks} today={today} />
       </div>
+
+      <Accuracy weeks={mirror.weeks} />
 
       {last && <Factors last={last} />}
 

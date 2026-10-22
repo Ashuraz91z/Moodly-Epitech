@@ -626,3 +626,35 @@ body:has(.demo-float) .screen { padding-bottom: 96px; }
 .team-actions ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .team-actions li { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; }
 .team-actions li small { flex-basis: 100%; color: var(--muted); }
+
+/* Miroir : justesse du regard du manager */
+.accuracy { display: grid; gap: 20px; }
+.accuracy h2 { margin: 0; }
+.accuracy h3 { margin: 0 0 8px; font-size: 15px; }
+.accuracy h3 small { color: var(--muted); font-weight: 400; }
+.accuracy .verdict { margin: 0; }
+.accuracy-trend { display: flex; flex-direction: column; gap: 16px; }
+.accuracy-head { display: flex; align-items: center; gap: 16px; }
+.accuracy-head > strong { font-family: var(--display); font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
+.accuracy-head > strong.good { color: var(--green); }
+.accuracy-head > strong.mid { color: #b45309; }
+.accuracy-head > strong.low { color: var(--rose-text); }
+.accuracy-head div { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; color: var(--muted); font-size: 14px; }
+.accuracy-head .trend { margin: 0; }
+.accuracy-bars { display: flex; align-items: flex-end; gap: 6px; height: 150px; padding-top: 4px; }
+.accuracy-bars > div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; min-width: 0; }
+.accuracy-bars span { font-size: 12px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.accuracy-bars i { width: 100%; max-width: 44px; max-height: calc(100% - 40px); border-radius: 8px 8px 3px 3px; transition: height .4s var(--ease); }
+.accuracy-bars i.good, .diverge i { background: var(--green); }
+.accuracy-bars i.mid { background: #f59e0b; }
+.accuracy-bars i.low, .diverge i.off { background: var(--rose); }
+.accuracy-bars small { font-size: 11px; color: var(--muted); white-space: nowrap; }
+.accuracy-axes { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.accuracy-axes li { display: grid; grid-template-columns: 5.5em 1fr 9.5em; align-items: center; gap: 12px; font-size: 14px; }
+.accuracy-axes small { color: var(--muted); font-size: 13px; }
+.diverge { position: relative; height: 10px; border-radius: 5px; background: var(--soft); }
+.diverge::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--field); }
+.diverge i { position: absolute; top: 0; bottom: 0; border-radius: 5px; }
+.diverge-legend { display: grid; grid-template-columns: 1fr 1fr; margin: 4px calc(9.5em + 12px) 0 calc(5.5em + 12px); color: var(--muted); font-size: 11px; }
+.diverge-legend span:last-child { text-align: right; }
+@media (min-width: 720px) { .wide > .accuracy { grid-column: 1 / -1; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 32px; } .accuracy > h2, .accuracy > .verdict { grid-column: 1 / -1; } }
