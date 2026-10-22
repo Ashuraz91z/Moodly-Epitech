@@ -3,15 +3,26 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { api, ApiError, type Me, type Tag } from "@/lib/api";
+import { api, ApiError, type Action, type Me, type Tag } from "@/lib/api";
 import { fmt, todayInParis } from "../miroir/chart";
 import { Logout } from "../logout";
 import { Icon, Loader } from "../icons";
 import { Compare, MatrixInput, ZONES, zoneOf, type Point } from "../matrix";
 import { ONBOARDING_KEY, historyKey, lastWeeks, mondayOf, readHistory, streak, type Entry, type History } from "../history";
-import { AGREE, STATEMENTS, TRENDS, USEFUL, compareText, factorsOf, fromAnswers, needsHelp } from "../questionnaire";
+import { AGREE, FACTORS, SHORT, STATEMENTS, TRENDS, USEFUL, compareText, factorsOf, fromAnswers, needsHelp } from "../questionnaire";
 
-type Step = "loading" | "onboarding" | "closed" | "questions" | "self" | "done";
+type Step = "loading" | "onboarding" | "closed" | "questions" | "done";
+
+// Le questionnaire, écran par écran : 9 affirmations, le bilan de la semaine, puis le ressenti.
+type Kind = "agree" | "trend" | "tags" | "matrix" | "useful";
+const STEPS: { kind: Kind; short: string; group: string }[] = [
+  ...SHORT.map((short) => ({ kind: "agree" as const, short, group: "Ta semaine" })),
+  { kind: "trend", short: "Comparée à la précédente", group: "Le bilan" },
+  { kind: "tags", short: "Ce qui a pesé", group: "Le bilan" },
+  { kind: "matrix", short: "Ta place sur la matrice", group: "Ton ressenti" },
+  { kind: "useful", short: "Sentiment d'utilité", group: "Ton ressenti" },
+];
+const GROUPS = [...new Set(STEPS.map((s) => s.group))];
 type WeekStatus = { submitted: boolean; open: boolean; opens_on: string };
 const longDate = (d: string) => new Date(d).toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const short = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -41,6 +52,31 @@ function Help() {
         <li>en cas de détresse, le <strong>3114</strong> : gratuit, 24 h/24, 7 j/7.</li>
       </ul>
     </div>
+  );
+}
+
+// Ce que le manager a choisi de partager : la preuve que les réponses servent.
+function TeamActions() {
+  const [actions, setActions] = useState<Action[]>([]);
+  useEffect(() => {
+    api<Action[]>("/api/actions").then(setActions, () => {});
+  }, []);
+  const shown = actions.filter((a) => !a.done_at).concat(actions.filter((a) => a.done_at)).slice(0, 4);
+  if (!shown.length) return null;
+  return (
+    <section className="team-actions">
+      <h2>Ce que ton équipe met en place</h2>
+      <p className="muted small">Décidé par ton manager à partir des résultats anonymes de l&apos;équipe.</p>
+      <ul>
+        {shown.map((a) => (
+          <li key={a.id}>
+            <span className={`pill ${a.done_at ? "good" : "role"}`}>{a.done_at ? "Fait" : "En cours"}</span>
+            <span>{a.label}</span>
+            {a.factor && <small>{FACTORS.find((f) => f.key === a.factor)!.label}</small>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -83,6 +119,8 @@ function Done({ history }: { history: History }) {
 
       {entry && needsHelp(entry, entry.answers) && <Help />}
 
+      <TeamActions />
+
       {n > 0 && (
         <div>
           <div className="streak">
@@ -113,6 +151,7 @@ export default function Saisie() {
   const [picked, setPicked] = useState<number[]>([]);
   const [point, setPoint] = useState<Point | null>(null);
   const [impact, setImpact] = useState<number | null>(null);
+  const [q, setQ] = useState(0);
   const [history, setHistory] = useState<History>({});
   const [userId, setUserId] = useState("");
   const [error, setError] = useState("");
@@ -204,80 +243,122 @@ export default function Saisie() {
     );
   }
 
-  if (step === "self") {
-    const mood = point ? ZONES[zoneOf(point)] : null;
-    const ready = point && impact;
-    return (
-      <main className={`screen saisie${mood ? " mood" : ""}`} style={mood ? ({ "--mood": mood.color } as React.CSSProperties) : undefined}>
-        <Header />
-        <div className="intro">
-          <p className="step-label">Étape 2 sur 2 · Ton ressenti</p>
-          <h1>Et toi, où te situes-tu cette semaine ?</h1>
-          <p className="sub">Avant de voir ce que disent tes réponses, place-toi toi-même : le plaisir que tu as pris au travail, et ton énergie.</p>
-        </div>
-        <MatrixInput value={point} onChange={setPoint} />
-        <div className="saisie-side">
-          <fieldset className="segmented energy">
-            <legend>Et as-tu eu le sentiment d&apos;être utile ?</legend>
-            {USEFUL.map((label, i) => (
-              <label key={label}><input type="radio" name="impact" checked={impact === i + 1} onChange={() => setImpact(i + 1)} />{label}</label>
-            ))}
-          </fieldset>
-          {error && <p className="error" role="alert">{error}</p>}
-          <button className="btn" disabled={!ready || busy} onClick={send}>{busy ? "Envoi…" : "Voir ce que disent mes réponses"}</button>
-          {!ready && <p className="hint">{!point ? "Place ton point sur la matrice." : "Dis si tu t'es senti·e utile."}</p>}
-          <button className="link" onClick={() => go("questions")}>← Revoir mes réponses</button>
-        </div>
-      </main>
-    );
+  if (step === "loading") {
+    return <main className="screen"><Header />{error ? <p className="error" role="alert">{error}</p> : <Loader />}</main>;
   }
 
-  const missing = answers.filter((a) => a == null).length;
-  const complete = missing === 0 && trend != null && picked.length > 0;
+  return <Wizard {...{ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, toggle, point, setPoint, impact, setImpact, error, busy, send }} />;
+}
+
+type WizardProps = {
+  q: number; setQ: React.Dispatch<React.SetStateAction<number>>;
+  answers: (number | null)[]; setAnswers: React.Dispatch<React.SetStateAction<(number | null)[]>>;
+  trend: number | null; setTrend: (v: number) => void;
+  tags: Tag[]; picked: number[]; toggle: (id: number) => void;
+  point: Point | null; setPoint: (p: Point) => void;
+  impact: number | null; setImpact: (v: number) => void;
+  error: string; busy: boolean; send: () => void;
+};
+
+// Une question par écran, avec la liste des questions sur le côté (barre de progression sur mobile).
+function Wizard({ q, setQ, answers, setAnswers, trend, setTrend, tags, picked, toggle, point, setPoint, impact, setImpact, error, busy, send }: WizardProps) {
+  const answered = (k: number) =>
+    k < 9 ? answers[k] != null : k === 9 ? trend != null : k === 10 ? picked.length > 0 : k === 11 ? point?.energy != null : impact != null;
+  const firstOpen = STEPS.findIndex((_, k) => !answered(k));
+  const reachable = (k: number) => firstOpen === -1 || k <= firstOpen;
+  const done = STEPS.filter((_, k) => answered(k)).length;
+  const step = STEPS[q];
+  const last = q === STEPS.length - 1;
+
+  // Passe à la suivante après un choix à la souris ou au doigt (pas aux flèches du clavier).
+  const advance = (k: number) => setTimeout(() => setQ((cur) => (cur === k && k < STEPS.length - 1 ? k + 1 : cur)), 260);
+  const setAnswer = (k: number, v: number) => setAnswers((a) => a.map((x, i) => (i === k ? v : x)));
+
+  // Touches 1 à 5 sur les affirmations.
+  useEffect(() => {
+    if (q >= 9) return;
+    const onKey = (e: KeyboardEvent) => {
+      const v = Number(e.key);
+      if (v >= 1 && v <= 5 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        setAnswers((a) => a.map((x, i) => (i === q ? v : x)));
+        advance(q);
+      }
+    };
+    addEventListener("keydown", onKey);
+    return () => removeEventListener("keydown", onKey);
+  });
+
+  function go(k: number) {
+    setQ(k);
+    scrollTo({ top: 0 });
+  }
+
+  const options = (name: string, labels: string[], value: number | null, onPick: (v: number) => void, values?: number[], auto = true) => (
+    <div className="answers" role="radiogroup">
+      {labels.map((label, i) => {
+        const v = values?.[i] ?? i + 1;
+        return (
+          <label key={label} className="answer">
+            <input type="radio" name={name} checked={value === v} onChange={() => onPick(v)} onClick={(e) => auto && e.detail > 0 && advance(q)} />
+            {!values && <span className="n">{v}</span>}
+            {label}
+          </label>
+        );
+      })}
+    </div>
+  );
+
+  const mood = step.kind === "matrix" && point?.energy != null ? ZONES[zoneOf(point)] : null;
   return (
-    <main className="screen roomy">
+    <main className={`screen wizard${mood ? " mood" : ""}`} style={mood ? ({ "--mood": mood.color } as React.CSSProperties) : undefined}>
       <Header />
-      {step === "loading" ? (
-        error ? <p className="error" role="alert">{error}</p> : <Loader />
-      ) : (
-        <>
-          <div className="intro">
-            <p className="step-label">Étape 1 sur 2 · Ta semaine</p>
-            <h1>Ta semaine en 9 affirmations</h1>
-            <p className="sub">« Cette semaine… » Réponds de 1 (pas du tout d&apos;accord) à 5 (tout à fait d&apos;accord). Environ 2 minutes.</p>
+      <aside className="wizard-nav" aria-label="Les questions">
+        <div className="wizard-progress" role="progressbar" aria-valuemin={0} aria-valuemax={STEPS.length} aria-valuenow={done} aria-label="Questions répondues">
+          <div style={{ width: `${(done / STEPS.length) * 100}%` }} />
+        </div>
+        <p className="wizard-count">{done} sur {STEPS.length} · environ 2 minutes</p>
+        {GROUPS.map((g) => (
+          <div key={g} className="wizard-group">
+            <p>{g}</p>
+            <ol>
+              {STEPS.map((s, k) => s.group === g && (
+                <li key={k}>
+                  <button className={answered(k) ? "done" : undefined} aria-current={k === q ? "step" : undefined} disabled={!reachable(k)} onClick={() => go(k)}>
+                    <span className="n" aria-hidden>{answered(k) && k !== q ? <Icon name="check" size={12} /> : k + 1}</span>
+                    {s.short}
+                  </button>
+                </li>
+              ))}
+            </ol>
           </div>
-          <ol className="likert">
-            {STATEMENTS.map((text, i) => (
-              <li key={text}>
-                <fieldset>
-                  <legend><span className="qn">{i + 1}</span>{text}</legend>
-                  <div className="scale5">
-                    {AGREE.map((label, v) => (
-                      <label key={label} title={label}>
-                        <input
-                          type="radio"
-                          name={`q${i}`}
-                          checked={answers[i] === v + 1}
-                          onChange={() => setAnswers((a) => a.map((x, k) => (k === i ? v + 1 : x)))}
-                          aria-label={label}
-                        />
-                        <span>{v + 1}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <div className="scale5-ends" aria-hidden><span>Pas du tout d&apos;accord</span><span>Tout à fait</span></div>
-                </fieldset>
-              </li>
-            ))}
-          </ol>
-          <fieldset className="segmented">
-            <legend>Par rapport à la semaine dernière, ta semaine a été…</legend>
-            {TRENDS.map((t) => (
-              <label key={t.value}><input type="radio" name="trend" checked={trend === t.value} onChange={() => setTrend(t.value)} />{t.label}</label>
-            ))}
-          </fieldset>
-          <div>
-            <h2>Qu&apos;est-ce qui a le plus pesé cette semaine, en bien ou en mal ? <small>(1 à 3)</small></h2>
+        ))}
+        <Links />
+      </aside>
+
+      <section className="wizard-main" key={q}>
+        <p className="step-label">Question {q + 1} sur {STEPS.length} · {step.group}</p>
+        {step.kind === "agree" && (
+          <>
+            <div className="intro">
+              <p className="wizard-lead">Cette semaine…</p>
+              <h1>{STATEMENTS[q]}</h1>
+            </div>
+            {options(`q${q}`, AGREE, answers[q], (v) => setAnswer(q, v))}
+            <p className="hint wizard-keys">Astuce : touches 1 à 5 au clavier.</p>
+          </>
+        )}
+        {step.kind === "trend" && (
+          <>
+            <div className="intro"><h1>Par rapport à la semaine dernière, ta semaine a été…</h1></div>
+            {options("trend", TRENDS.map((t) => t.label), trend, setTrend, TRENDS.map((t) => t.value))}
+          </>
+        )}
+        {step.kind === "tags" && (
+          <>
+            <div className="intro">
+              <h1>Qu&apos;est-ce qui a le plus pesé cette semaine, en bien ou en mal ?</h1>
+              <p className="sub">Choisis 1 à 3 sujets.</p>
+            </div>
             <div className="chips">
               {tags.map((t) => (
                 <button key={t.id} className="chip" aria-pressed={picked.includes(t.id)} disabled={!picked.includes(t.id) && picked.length >= 3} onClick={() => toggle(t.id)}>
@@ -285,17 +366,36 @@ export default function Saisie() {
                 </button>
               ))}
             </div>
-          </div>
-          <button className="btn" disabled={!complete} onClick={() => go("self")}>Continuer</button>
-          {!complete && (
-            <p className="hint">
-              {missing ? `Encore ${missing} affirmation${missing > 1 ? "s" : ""}.` : trend == null ? "Compare avec la semaine dernière." : "Choisis au moins un sujet."}
-            </p>
+          </>
+        )}
+        {step.kind === "matrix" && (
+          <>
+            <div className="intro">
+              <h1>Et toi, où te situes-tu cette semaine ?</h1>
+              <p className="sub">Avant de voir ce que disent tes réponses, place-toi toi-même : le plaisir que tu as pris au travail, et ton énergie.</p>
+            </div>
+            <MatrixInput value={point} onChange={setPoint} />
+          </>
+        )}
+        {step.kind === "useful" && (
+          <>
+            <div className="intro"><h1>As-tu eu le sentiment d&apos;être utile cette semaine ?</h1></div>
+            {options("impact", USEFUL, impact, setImpact, undefined, false)}
+          </>
+        )}
+
+        {error && <p className="error" role="alert">{error}</p>}
+        <div className="wizard-foot">
+          <button className="link" disabled={q === 0} onClick={() => go(q - 1)}>← Précédente</button>
+          {last ? (
+            <button className="btn small" disabled={firstOpen !== -1 || busy} onClick={send}>{busy ? "Envoi…" : "Voir ce que disent mes réponses"}</button>
+          ) : (
+            <button className="btn small" disabled={!answered(q)} onClick={() => go(q + 1)}>Suivante →</button>
           )}
-          <p className="note">Ton manager ne verra jamais ta réponse individuelle.</p>
-          <Links />
-        </>
-      )}
+        </div>
+        {last && firstOpen !== -1 && answered(q) && <p className="hint">Il manque une réponse : « {STEPS[firstOpen].short} ».</p>}
+        <p className="note">Ton manager ne verra jamais ta réponse individuelle.</p>
+      </section>
     </main>
   );
 }

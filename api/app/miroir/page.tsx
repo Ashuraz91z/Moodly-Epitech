@@ -5,23 +5,12 @@ import { useRouter } from "next/navigation";
 import { api, ApiError, type Mirror } from "@/lib/api";
 import { Logout } from "../logout";
 import { Icon, Loader, type IconName } from "../icons";
-import { TeamMatrix } from "../matrix";
+import { MatrixInput, TeamMatrix, ZONES, zoneOf, type Point } from "../matrix";
 import { ActionPlan } from "./plan";
-import { FACTORS } from "../questionnaire";
+import { FACTORS, USEFUL } from "../questionnaire";
 import { downloadCsv } from "@/lib/csv";
 import { FORECAST, MirrorChart, TEAM, fmt, todayInParis } from "./chart";
 
-const ACTIONS: Record<string, string[]> = {
-  "Charge de travail": ["Point d'équipe sur la charge", "Entretiens individuels", "Revoir les priorités du sprint"],
-  Ambiance: ["Moment d'équipe informel", "Rétrospective sur le fonctionnement de l'équipe", "Clarifier les règles de communication"],
-  Management: ["Demander un retour anonyme sur ton management", "Expliquer davantage les décisions", "Points individuels réguliers"],
-  Reconnaissance: ["Valoriser les réussites en réunion", "Retours individuels positifs et précis", "Parler des perspectives d'évolution"],
-  "Équilibre vie pro / perso": ["Limiter réunions et messages hors horaires", "Rediscuter télétravail et flexibilité", "Surveiller les heures supplémentaires"],
-  "Sens du travail": ["Rappeler l'impact du travail de l'équipe", "Associer l'équipe aux décisions", "Partager les retours clients"],
-  "Conditions matérielles": ["Lister les irritants matériels avec l'équipe", "Remonter les besoins prioritaires", "Suivre les demandes en cours"],
-  Personnel: ["Rester disponible sans insister", "Rappeler les ressources d'aide (médecine du travail)", "Alléger temporairement si besoin"],
-  Autonomie: ["Laisser l'équipe choisir comment s'organiser", "Réduire les validations superflues", "Déléguer une décision à l'équipe"],
-};
 const WEATHER: { min: number; icon: IconName; color: string; label: string }[] = [
   { min: 4.2, icon: "sun", color: "#d97706", label: "Grand soleil" },
   { min: 3.4, icon: "cloudSun", color: "#d97706", label: "Éclaircies" },
@@ -32,16 +21,16 @@ const WEATHER: { min: number; icon: IconName; color: string; label: string }[] =
 const weatherOf = (avg: number) => WEATHER.find((w) => avg >= w.min)!;
 const shortDate = (d: string) => new Date(d).toLocaleDateString("fr-FR", { day: "numeric", month: "long", timeZone: "UTC" });
 
-const UNDERESTIMATE = ["Te rassurer : l'équipe va plutôt bien", "Partager ce constat positif avec l'équipe", "Prêter attention à ton propre moral"];
-
+// Pronostic de la semaine : le manager place son équipe sur la matrice avant de voir le Miroir.
 function Forecast({ onDone }: { onDone: () => void }) {
-  const [score, setScore] = useState(3);
+  const [point, setPoint] = useState<Point | null>(null);
+  const [impact, setImpact] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   async function send() {
     setBusy(true);
     try {
-      await api("/api/predictions", { score });
+      await api("/api/predictions", { pleasure: point!.pleasure, energy: point!.energy, impact });
       onDone();
     } catch (e) {
       if (e instanceof ApiError && e.status === 409) onDone();
@@ -49,24 +38,33 @@ function Forecast({ onDone }: { onDone: () => void }) {
     }
     setBusy(false);
   }
+  const ready = point?.energy != null && impact != null;
   return (
-    <main className="screen">
-      <p className="eyebrow">Espace manager</p>
-      <h1>Avant de voir les résultats…</h1>
-      <p className="sub">Selon toi, quel est le moral de ton équipe cette semaine ? Tu le compareras lundi, quand la semaine sera close.</p>
-      <div>
-        <div className="forecast">
-          <output htmlFor="forecast">{fmt(score)} <small>/ 5</small></output>
-          <input id="forecast" type="range" style={{ "--pct": `${((score - 1) / 4) * 100}%` } as React.CSSProperties} min="1" max="5" step="0.5" value={score} onChange={(e) => setScore(Number(e.target.value))} aria-label="Ton pronostic, de 1 à 5" />
-          <div className="ticks" aria-hidden>{[1, 2, 3, 4, 5].map((n) => <span key={n}>{n}</span>)}</div>
-        </div>
+    <main className="screen saisie">
+      <div className="top">
+        <p className="eyebrow">Espace manager</p>
+        <Logout />
       </div>
-      <div className="card">
-        <strong>Pourquoi ce pronostic ?</strong>
-        <p>Chaque semaine, le Miroir compare ton pronostic au moral réel de l&apos;équipe : la moyenne de son plaisir, de son énergie et de son impact, d&apos;après le questionnaire du jeudi et du vendredi. Un seul pronostic par semaine, non modifiable.</p>
+      <div className="intro">
+        <h1>Avant de voir les résultats…</h1>
+        <p className="sub">
+          Où places-tu ton équipe cette semaine ? Pose-la sur la matrice : le plaisir qu&apos;elle prend au travail et son énergie.
+          Lundi, une fois la semaine close, tu verras où elle s&apos;est placée elle-même.
+        </p>
       </div>
-      {error && <p className="error" role="alert">{error}</p>}
-      <button className="btn dark" disabled={busy} onClick={send}>{busy ? "Révélation…" : "Révéler le Miroir"}</button>
+      <MatrixInput value={point} onChange={setPoint} team />
+      <div className="saisie-side">
+        <fieldset className="segmented energy">
+          <legend>Et selon toi, se sent-elle utile ?</legend>
+          {USEFUL.map((label, i) => (
+            <label key={label}><input type="radio" name="impact" checked={impact === i + 1} onChange={() => setImpact(i + 1)} />{label}</label>
+          ))}
+        </fieldset>
+        <p className="note">Un seul pronostic par semaine, non modifiable : c&apos;est ce qui rend la comparaison honnête.</p>
+        {error && <p className="error" role="alert">{error}</p>}
+        <button className="btn dark" disabled={!ready || busy} onClick={send}>{busy ? "Révélation…" : "Révéler le Miroir"}</button>
+        {!ready && <p className="hint">{point?.energy == null ? "Place ton équipe sur la matrice." : "Dis si elle se sent utile, selon toi."}</p>}
+      </div>
     </main>
   );
 }
@@ -144,7 +142,7 @@ export default function Miroir() {
   const dominant = row?.dominant_tag ?? null;
   const first = mirror.weeks.find((w) => w.gap != null);
   const participation = last && mirror.team_size ? Math.round((last.responses / mirror.team_size) * 100) : null;
-  const actions = gap != null && gap < 0 ? UNDERESTIMATE : ACTIONS[dominant ?? ""] ?? [];
+  const forecast = row?.forecast ?? null;
 
   function exportCsv() {
     if (mirror?.needs_prediction !== false) return;
@@ -215,8 +213,15 @@ export default function Miroir() {
       </div>
 
       <section className="matrix-block">
-        <h2>Matrice de l&apos;équipe <small>trajectoire sur 8 semaines</small></h2>
-        {last ? <TeamMatrix data={last} weeks={mirror.weeks} /> : <p className="note">La matrice s&apos;affiche à partir de 5 réponses dans une semaine close.</p>}
+        <h2>Matrice de l&apos;équipe <small>ton pronostic face à ses réponses</small></h2>
+        {last && forecast && (
+          <p className="verdict">
+            {zoneOf(forecast) === zoneOf(last)
+              ? <>Tu voyais ton équipe « {ZONES[zoneOf(forecast)].label} » : c&apos;est bien là qu&apos;elle s&apos;est placée.</>
+              : <>Tu voyais ton équipe « {ZONES[zoneOf(forecast)].label} », elle s&apos;est placée « {ZONES[zoneOf(last)].label} ».</>}
+          </p>
+        )}
+        {last ? <TeamMatrix data={last} weeks={mirror.weeks} forecast={forecast} /> : <p className="note">La matrice s&apos;affiche à partir de 5 réponses dans une semaine close.</p>}
       </section>
 
       <div className="miroir-side">
@@ -235,7 +240,7 @@ export default function Miroir() {
           <div className="ok-card" role="status"><Icon name="check" size={22} />Ta perception était proche du ressenti de l&apos;équipe la semaine dernière.</div>
         ) : null}
 
-        <ActionPlan suggestions={blind ? actions : []} weeks={mirror.weeks} today={today} />
+        <ActionPlan last={last} weeks={mirror.weeks} today={today} />
       </div>
 
       {last && <Factors last={last} />}

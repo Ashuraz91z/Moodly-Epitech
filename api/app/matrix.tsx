@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import type { LastWeek } from "@/lib/api";
-import { fmt } from "./miroir/chart";
+import { FORECAST, fmt } from "./miroir/chart";
 
 // Matrice du moral (modèle de Warr) : plaisir en hauteur, énergie en largeur, de 1 à 5.
 // Le 3e axe, l'impact (sentiment d'avoir été utile), s'affiche à côté en jauge.
@@ -43,8 +43,8 @@ function Quadrants({ content }: { content?: Partial<Record<Corner, React.ReactNo
   ));
 }
 
-// Point plaisir × énergie ; l'impact du point d'origine est conservé.
-export function MatrixInput({ value, onChange }: { value: Point | null; onChange: (p: Point) => void }) {
+// Point plaisir × énergie ; l'impact du point d'origine est conservé. team : pronostic du manager sur son équipe.
+export function MatrixInput({ value, onChange, team = false }: { value: Point | null; onChange: (p: Point) => void; team?: boolean }) {
   const pad = useRef<HTMLDivElement>(null);
   // Souris : aperçu de la case visée avant de cliquer.
   const [hover, setHover] = useState<Point | null>(null);
@@ -92,7 +92,7 @@ export function MatrixInput({ value, onChange }: { value: Point | null; onChange
         >
           <Quadrants />
           {hover && (hover.energy !== value?.energy || hover.pleasure !== value?.pleasure) && <span className="dot ghost" style={pos(hover)} />}
-          {placed ? <span className="dot" style={{ ...pos(value!), background: ZONES[zone!].color }} /> : <span className="matrix-hint">Place ton point ici</span>}
+          {placed ? <span className="dot" style={{ ...pos(value!), background: ZONES[zone!].color }} /> : <span className="matrix-hint">{team ? "Place ton équipe ici" : "Place ton point ici"}</span>}
         </div>
         <span className="axis-x" aria-hidden>Énergie →</span>
       </div>
@@ -100,11 +100,11 @@ export function MatrixInput({ value, onChange }: { value: Point | null; onChange
         {zone ? (
           <>
             <strong>{ZONES[zone].label}</strong>
-            <span>{ZONES[zone].text}</span>
+            {!team && <span>{ZONES[zone].text}</span>}
             <small>{describe(value!)}</small>
           </>
         ) : (
-          <span>En haut, tu as pris du plaisir au travail ; à droite, tu avais de l&apos;énergie.</span>
+          <span>{team ? "En haut, l'équipe prend du plaisir au travail ; à droite, elle a de l'énergie." : "En haut, tu as pris du plaisir au travail ; à droite, tu avais de l'énergie."}</span>
         )}
       </div>
     </div>
@@ -120,25 +120,28 @@ export type Mark = { p: Point; title: string; label?: string; color?: string; st
 export function MatrixPlot({ marks, label, trail = false, zones }: {
   marks: Mark[]; label: string; trail?: boolean; zones?: Partial<Record<Corner, React.ReactNode>>;
 }) {
+  // Le tracé relie les points sans « strong » explicite (un pronostic, par exemple, reste à part).
+  const path = marks.filter((m) => m.strong == null);
   return (
     <div className="matrix-frame">
       <span className="axis-y" aria-hidden>Plaisir ↑</span>
       <div className="matrix" role="img" aria-label={label}>
         <Quadrants content={zones} />
-        {trail && marks.length > 1 && (
+        {trail && path.length > 1 && (
           <svg className="trail" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden>
-            <polyline points={marks.map((m) => coords(m.p)).join(" ")} vectorEffect="non-scaling-stroke" />
+            <polyline points={path.map((m) => coords(m.p)).join(" ")} vectorEffect="non-scaling-stroke" />
           </svg>
         )}
         {marks.map((m, i) => {
-          const last = m.strong ?? (!trail || i === marks.length - 1);
+          const k = path.indexOf(m);
+          const last = m.strong ?? (!trail || k === path.length - 1);
           const x = energyOf(m.p);
           return (
             <span
               key={i}
               className={`mark${last ? " last" : ""}${x > 4 ? " edge-r" : x < 2 ? " edge-l" : ""}`}
               title={m.title}
-              style={{ ...pos(m.p), background: m.color, opacity: last || !trail ? undefined : 0.35 + 0.65 * (i / (marks.length - 1)) }}
+              style={{ ...pos(m.p), background: m.color, opacity: last || !trail ? undefined : 0.35 + 0.65 * (k / (path.length - 1)) }}
             >
               {m.label && <em>{m.label}</em>}
             </span>
@@ -170,15 +173,19 @@ export function Usefulness({ rows }: { rows: { label: string; value: number; col
 export const zoneShares = (counts: Partial<Record<Zone, number>>, total: number) =>
   Object.fromEntries((Object.keys(CORNERS) as Corner[]).map((c) => [c, <><b>{Math.round(((counts[CORNERS[c]] ?? 0) / total) * 100)} %</b>{ZONES[CORNERS[c]].label}</>]));
 
-// Côté manager : trajectoire semaine par semaine et répartition de la dernière semaine close.
-export function TeamMatrix({ data, weeks }: { data: LastWeek; weeks: { week_start: string; pleasure: number | null; energy: number | null; impact: number | null }[] }) {
+// Côté manager : trajectoire semaine par semaine, répartition de la dernière semaine close
+// et, s'il existe, le pronostic fait pour cette semaine-là.
+export function TeamMatrix({ data, weeks, forecast }: {
+  data: LastWeek; weeks: { week_start: string; pleasure: number | null; energy: number | null; impact: number | null }[]; forecast?: Required<Point> | null;
+}) {
   const counts = data.energy_zones ?? {};
   const path = weeks.filter((w) => w.energy != null && w.pleasure != null);
   const marks: Mark[] = path.map((w, i) => ({
     p: { impact: w.impact ?? 0, pleasure: w.pleasure!, energy: w.energy! },
     title: `Semaine du ${shortDate(w.week_start)}`,
-    label: i === 0 || i === path.length - 1 ? shortDate(w.week_start) : undefined,
+    label: i === path.length - 1 ? "Équipe" : i === 0 ? shortDate(w.week_start) : undefined,
   }));
+  if (forecast) marks.push({ p: forecast, title: "Ton pronostic", label: "Ton pronostic", color: FORECAST, strong: true });
   const middle = Math.round(((counts.middle ?? 0) / data.responses) * 100);
   return (
     <div className="team-matrix">
@@ -188,9 +195,12 @@ export function TeamMatrix({ data, weeks }: { data: LastWeek; weeks: { week_star
         zones={zoneShares(counts, data.responses)}
         label={`Trajectoire de l'équipe : ${marks.map((m) => `${m.title}, plaisir ${fmt(m.p.pleasure)}, énergie ${fmt(energyOf(m.p))}`).join(" ; ")}.`}
       />
-      <Usefulness rows={[{ label: `Semaine du ${shortDate(data.week_start)}`, value: data.impact }]} />
+      <Usefulness rows={[
+        { label: "Équipe", value: data.impact },
+        ...(forecast ? [{ label: "Ton pronostic", value: forecast.impact, color: FORECAST }] : []),
+      ]} />
       <p className="muted small">
-        Chaque point est une semaine close, le plus marqué la plus récente. Pourcentages : semaine du {shortDate(data.week_start)} ({data.responses} réponses),
+        Chaque point est une semaine close, le plus marqué la plus récente{forecast && <>, face à ton pronostic pour cette semaine-là</>}. Pourcentages : semaine du {shortDate(data.week_start)} ({data.responses} réponses),
         dont {middle} % « mitigé ».
         {data.tags.length > 0 && <> Sujets les plus cités : <strong>{data.tags.join(" · ")}</strong>.</>}
       </p>

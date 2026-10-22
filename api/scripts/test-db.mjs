@@ -73,10 +73,11 @@ await fails("42501", "authenticated", THOMAS, Q());
 
 // Miroir : réservé au manager, pronostic d'abord, une seule fois par semaine.
 await fails("42501", "authenticated", INES, "select get_mirror()");
-await fails("42501", "authenticated", INES, "select submit_prediction(3)");
+await fails("42501", "authenticated", INES, "select submit_prediction(3, 3, 3)");
 assert.deepEqual((await as("authenticated", THOMAS, "select get_mirror() m"))[0].m, { needs_prediction: true });
-await as("authenticated", THOMAS, "select submit_prediction(3.5)");
-await fails("23505", "authenticated", THOMAS, "select submit_prediction(4)");
+await fails("22023", "authenticated", THOMAS, "select submit_prediction(6, 3, 3)");
+await as("authenticated", THOMAS, "select submit_prediction(4, 3, 4)"); // pronostic sur la matrice
+await fails("23505", "authenticated", THOMAS, "select submit_prediction(4, 4, 4)");
 
 const m = (await as("authenticated", THOMAS, "select get_mirror() m"))[0].m;
 assert.equal(m.needs_prediction, false);
@@ -86,7 +87,9 @@ assert.ok(closedWeeks.length >= 6 && closedWeeks.every((w) => w.responses >= 5),
 assert.ok(!JSON.stringify(m).includes("entry_key") && !JSON.stringify(m).includes("answers"), "aucune réponse brute");
 const old = m.weeks.find((w) => w.gap > 1.5);
 assert.equal(old?.dominant_tag, "Charge de travail", "angle mort détecté sur les premières semaines");
-assert.equal(m.weeks.at(-1).prediction, 3.5);
+assert.equal(m.weeks.at(-1).prediction, 3.7, "score = moyenne des 3 axes");
+assert.deepEqual(m.weeks.at(-1).forecast, { pleasure: 4, energy: 3, impact: 4 });
+assert.ok(closedWeeks.every((w) => w.forecast && w.factors?.intensite), "pronostic et facteurs semaine par semaine");
 assert.equal(m.weeks.at(-1).team_avg, null, "semaine en cours jamais publiée");
 assert.ok(m.current.responses >= 1, "seul le nombre de réponses de la semaine en cours est visible");
 
@@ -106,9 +109,15 @@ assert.ok((L.zones.thriving ?? 0) > (L.zones.danger ?? 0), "l'équipe est remont
 // Plan d'action : réservé au manager de l'équipe.
 const act = (await as("authenticated", THOMAS, "insert into actions (team_id, label) values ($1, 'Point charge') returning week_start, label", [TEAM]))[0];
 assert.equal(act.label, "Point charge");
-assert.equal((await as("authenticated", INES, "select * from actions")).length, 0);
+assert.equal((await as("authenticated", INES, "select * from actions")).length, 2, "l'équipe ne voit que les actions partagées");
+await as("authenticated", THOMAS, "update actions set shared = true where label = 'Point charge'");
+assert.equal((await as("authenticated", INES, "select * from actions")).length, 3);
+assert.equal((await as("authenticated", "00000000-0000-0000-0000-000000000012", "select * from actions")).length, 0, "pas celles des autres équipes");
+await fails("23514", "authenticated", THOMAS, "insert into actions (team_id, label, factor) values ($1, 'x', 'inconnu')", [TEAM]);
 await fails("42501", "authenticated", INES, "insert into actions (team_id, label) values ($1, 'x')", [TEAM]);
 await fails("23514", "authenticated", THOMAS, "insert into actions (team_id, label) values ($1, '  ')", [TEAM]);
+await as("authenticated", INES, "update actions set done_at = null");
+assert.equal((await as("authenticated", THOMAS, "select count(*)::int n from actions where done_at is not null"))[0].n, 2, "l'équipe ne modifie rien");
 await as("authenticated", THOMAS, "update actions set done_at = now()");
 assert.ok((await as("authenticated", THOMAS, "select done_at from actions"))[0].done_at);
 

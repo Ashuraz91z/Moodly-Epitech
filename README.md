@@ -56,11 +56,11 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
 | GET | `/api/tags` | tous | | `[{ id, label }]` |
 | GET | `/api/moods/week` | collaborateur | | `{ submitted, open, opens_on }` (fenêtre jeudi-vendredi) |
 | POST | `/api/moods` | collaborateur | `{ pleasure, energy, impact: 1-5, answers: [9 notes 1-5], trend: -1/0/1, tagIds: [1 à 3 ids] }` | 204, une fois par semaine |
-| POST | `/api/predictions` | manager | `{ score: 1-5 }` (ex. 3.5) | 204 |
+| POST | `/api/predictions` | manager | `{ pleasure, energy, impact: 1-5 }` (son équipe placée sur la matrice) | 204, une fois par semaine |
 | GET | `/api/mirror?weeks=8` | manager | | voir ci-dessous |
-| GET | `/api/actions` | manager | | `[{ id, week_start, label, done_at }]` (plan d'action de son équipe) |
-| POST | `/api/actions` | manager | `{ label }` | `{ id }` (semaine en cours) |
-| PATCH | `/api/actions` | manager | `{ id, done: bool }` | 204 |
+| GET | `/api/actions` | manager, collaborateur | | `[{ id, week_start, label, factor, shared, done_at }]` (le collaborateur ne voit que les actions partagées) |
+| POST | `/api/actions` | manager | `{ label, factor? }` (`intensite`, `autonomie`, `emotions`, `relations`, `sens`, `securite`) | `{ id }` (semaine en cours) |
+| PATCH | `/api/actions` | manager | `{ id, done?: bool, shared?: bool }` | 204 |
 | DELETE | `/api/actions` | manager | `{ id }` | 204 |
 | GET | `/api/admin` | admin | | `{ stats, teams, users, tags }` (agrégats uniquement) |
 | POST | `/api/admin/users` | admin | `{ email, password, role: "employee" \| "admin", teamId? }` | id du compte |
@@ -82,13 +82,16 @@ Erreurs : `{ "error": "message" }` avec le code HTTP (401 token absent/invalide,
             "zones": { "thriving": 5, "middle": 3 }, "energy_zones": { "enthusiasm": 7, "middle": 1 },
             "factors": { "intensite": 4, "autonomie": 3.5, "emotions": 3.88, "relations": 4.38, "sens": 3.75, "securite": 4.13 },
             "trend": { "better": 5, "same": 3, "worse": 0 }, "tags": ["Management", "Reconnaissance"] },
-  "weeks": [{ "week_start": "2026-10-12", "prediction": 4, "team_avg": 4.17, "pleasure": 4.13, "energy": 4.13,
-              "impact": 4.25, "responses": 8, "gap": -0.17, "dominant_tag": "Management" }]
+  "weeks": [{ "week_start": "2026-10-12", "prediction": 4, "forecast": { "pleasure": 4, "energy": 4, "impact": 4 },
+              "team_avg": 4.17, "pleasure": 4.13, "energy": 4.13, "impact": 4.25, "responses": 8, "gap": -0.17,
+              "dominant_tag": "Management", "factors": { "intensite": 4, "...": "..." } }]
 }
 ```
 
 - Une semaine (lundi → dimanche) n'est publiée qu'une fois close et avec au moins 5 réponses ; la semaine en cours ne montre que son nombre de réponses.
+- Le pronostic (`forecast`) est un point sur la matrice et une utilité ; `prediction` en est la moyenne.
 - Moral (`team_avg`) = moyenne des trois axes ; `gap = prediction - team_avg` (positif : le manager surestimait), angle mort au-delà de 1,5.
+- Plan d'action : chaque action peut viser un facteur ; son effet se lit de la semaine close avant son lancement à la dernière semaine close (`weeks[].factors`).
 - La matrice affichée est plaisir × énergie (`energy_zones` : `enthusiasm` « En forme », `serenity` « Serein·e », `tension` « Sous pression », `dejection` « À bout », `middle` « Mitigé », un axe à 3). Le 3e axe, l'impact (sentiment d'avoir été utile), s'affiche en jauge. `zones` (plaisir × impact) reste fourni mais n'est pas affiché.
 - `factors` : les 6 facteurs de risques psychosociaux (Gollac) sur Q3 à Q11, de 1 à 5 (5 = favorable, Q6 inversée).
 
