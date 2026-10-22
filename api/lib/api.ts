@@ -24,7 +24,9 @@ export async function api<T>(path: string, body?: unknown, method = "POST"): Pro
 export type Role = "employee" | "manager" | "admin";
 export type Me = { id: string; role: Role; team: { id: string; name: string } | null };
 export type Tag = { id: number; label: string };
-export type Week = { week_start: string; prediction: number | null; team_avg: number | null; impact: number | null; pleasure: number | null; energy: number | null; responses: number | null; gap: number | null; dominant_tag: string | null };
+export type Week = {
+  week_start: string; prediction: number | null; forecast: { pleasure: number; energy: number; impact: number } | null;
+  factors: Record<FactorKey, number> | null; team_avg: number | null; impact: number | null; pleasure: number | null; energy: number | null; responses: number | null; gap: number | null; dominant_tag: string | null };
 export type Mirror =
   | { needs_prediction: true }
   | { needs_prediction: false; team_size: number; current: { week_start: string; responses: number }; last: LastWeek | null; weeks: Week[] };
@@ -45,4 +47,4 @@ export type Admin = {
   users: AdminUser[];
   tags: (Tag & { uses: number })[];
 };
-export type Action = { id: string; week_start: string; label: string; done_at: string | null };
+export type Action = { id: string; week_start: string; label: string; factor: FactorKey | null; shared: boolean; done_at: string | null };

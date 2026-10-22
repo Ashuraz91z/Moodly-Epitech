@@ -13,6 +13,8 @@ export const STATEMENTS = [
   "J'ai trouvé du sens à ce que j'ai fait.",                            // Q10 conflits de valeurs
   "Je me suis senti·e serein·e face à l'avenir de mon poste.",          // Q11 insécurité de la situation de travail
 ];
+// Libellés courts (barre latérale du questionnaire), dans le même ordre.
+export const SHORT = ["Charge de travail", "Déconnexion", "Organisation", "Situations tendues", "Collègues", "Soutien du manager", "Reconnaissance", "Sens", "Avenir du poste"];
 export const AGREE = ["Pas du tout d'accord", "Plutôt pas d'accord", "Ni l'un ni l'autre", "Plutôt d'accord", "Tout à fait d'accord"];
 export const TRENDS = [
   { value: -1, label: "Moins bonne" },
